@@ -3,7 +3,7 @@
 import { Menu, Package, Search, ShoppingCart, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BrandLogo } from "@/components/app/BrandLogo";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +14,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useAuthState } from "@/lib/auth/client";
 import { useTotalItems } from "@/lib/store/cart-store-provider";
 import { useChatActions, useIsChatOpen } from "@/lib/store/chat-store-provider";
 
@@ -25,19 +24,74 @@ const navLinks = [
   { label: "Accessories", href: "/products?category=accessories" },
 ];
 
+type AuthUser = {
+  id: string;
+  email: string;
+  name?: string;
+  role?: string;
+};
+
 export function Header() {
   const router = useRouter();
   const { openChat } = useChatActions();
   const isChatOpen = useIsChatOpen();
   const totalItems = useTotalItems();
-  const { isSignedIn, user, signOut } = useAuthState();
+
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+
+  const isSignedIn = !!user;
+
+  function loadUser() {
+    try {
+      const rawUser = localStorage.getItem("auth_user");
+
+      if (!rawUser) {
+        setUser(null);
+        return;
+      }
+
+      const parsedUser = JSON.parse(rawUser) as AuthUser;
+
+      if (!parsedUser?.email) {
+        setUser(null);
+        return;
+      }
+
+      setUser(parsedUser);
+    } catch {
+      setUser(null);
+    }
+  }
+
+  function signOut() {
+    document.cookie = "auth_token=; path=/; max-age=0; samesite=lax";
+    localStorage.removeItem("auth_user");
+    setUser(null);
+    setMobileMenuOpen(false);
+    window.dispatchEvent(new Event("auth-changed"));
+    router.push("/");
+    router.refresh();
+  }
+
+  useEffect(() => {
+    loadUser();
+
+    window.addEventListener("auth-changed", loadUser);
+    window.addEventListener("storage", loadUser);
+
+    return () => {
+      window.removeEventListener("auth-changed", loadUser);
+      window.removeEventListener("storage", loadUser);
+    };
+  }, []);
 
   const handleSearch = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const query = searchQuery.trim();
+
     if (query) {
       router.push(`/products?q=${encodeURIComponent(query)}`);
     } else {
@@ -109,21 +163,43 @@ export function Header() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="hidden sm:inline-flex">
-                    {user?.email ?? "Account"}
+                    {user?.name || user?.email || "Account"}
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel>Account</DropdownMenuLabel>
+
+                <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuLabel>
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold">
+                        {user?.name || "Account"}
+                      </p>
+                      <p className="truncate text-xs font-normal text-muted-foreground">
+                        {user?.email}
+                      </p>
+                      {user?.role ? (
+                        <p className="text-xs font-normal text-muted-foreground">
+                          Role: {user.role}
+                        </p>
+                      ) : null}
+                    </div>
+                  </DropdownMenuLabel>
+
                   <DropdownMenuSeparator />
+
                   <DropdownMenuItem asChild>
                     <Link href="/orders">
                       <Package className="mr-2 h-4 w-4" />
                       My Orders
                     </Link>
                   </DropdownMenuItem>
+
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={signOut}>
-                    Sign out
+
+                  <DropdownMenuItem
+                    className="cursor-pointer text-red-600 focus:text-red-600"
+                    onClick={signOut}
+                  >
+                    Logout
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -135,6 +211,7 @@ export function Header() {
                 >
                   Sign in
                 </Link>
+
                 <Link
                   href="/signup"
                   className="rounded-lg border border-primary/20 px-3 py-2 text-sm font-semibold text-primary transition hover:bg-primary/5"
@@ -190,8 +267,18 @@ export function Header() {
                 {item.label}
               </Link>
             ))}
+
             {isSignedIn ? (
               <>
+                <div className="border-t border-gray-200 pt-3 dark:border-gray-800">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    {user?.name || "Account"}
+                  </p>
+                  <p className="break-all text-xs text-gray-500 dark:text-gray-400">
+                    {user?.email}
+                  </p>
+                </div>
+
                 <Link
                   href="/orders"
                   className="block py-2 text-sm font-medium text-gray-700 transition hover:text-primary dark:text-gray-300"
@@ -199,15 +286,13 @@ export function Header() {
                 >
                   My Orders
                 </Link>
+
                 <button
                   type="button"
-                  className="block w-full py-2 text-left text-sm font-medium text-gray-700 transition hover:text-primary dark:text-gray-300"
-                  onClick={async () => {
-                    await signOut();
-                    setMobileMenuOpen(false);
-                  }}
+                  className="block w-full py-2 text-left text-sm font-medium text-red-600 transition hover:text-red-700"
+                  onClick={signOut}
                 >
-                  Sign out
+                  Logout
                 </button>
               </>
             ) : (
@@ -219,6 +304,7 @@ export function Header() {
                 >
                   Sign in
                 </Link>
+
                 <Link
                   href="/signup"
                   className="block py-2 text-sm font-medium text-gray-700 transition hover:text-primary dark:text-gray-300"
