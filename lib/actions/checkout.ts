@@ -1,6 +1,7 @@
 "use server";
 
 import { cookies } from "next/headers";
+import { AUTH_COOKIE_NAME } from "@/lib/auth/constants";
 
 type CartItem = {
   productId: string;
@@ -34,8 +35,20 @@ type GoCheckoutResponse = {
   message?: string;
 };
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1";
+function getApiBaseUrl() {
+  const raw =
+    process.env.AFRIGOALS_API_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    "http://localhost:8080/api/v1";
+
+  const cleaned = raw.replace(/\/+$/, "");
+
+  if (cleaned.endsWith("/api/v1")) {
+    return cleaned;
+  }
+
+  return `${cleaned}/api/v1`;
+}
 
 export async function createCheckoutSession(
   items: CartItem[],
@@ -43,7 +56,7 @@ export async function createCheckoutSession(
 ): Promise<CheckoutResult> {
   try {
     const cookieStore = await cookies();
-    const token = cookieStore.get("auth_token")?.value;
+    const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
 
     if (!token) {
       return {
@@ -59,7 +72,7 @@ export async function createCheckoutSession(
       };
     }
 
-    if (!delivery.address.trim()) {
+    if (!delivery?.address?.trim()) {
       return {
         success: false,
         error: "Delivery address is required.",
@@ -78,6 +91,8 @@ export async function createCheckoutSession(
       };
     }
 
+    const apiBaseUrl = getApiBaseUrl();
+
     const payload = {
       items: items.map((item) => ({
         productId: item.productId,
@@ -92,11 +107,12 @@ export async function createCheckoutSession(
       },
     };
 
-    const res = await fetch(`${API_URL}/orders/checkout/pesapal`, {
+    const res = await fetch(`${apiBaseUrl}/orders/checkout/pesapal`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
       cache: "no-store",
@@ -110,7 +126,7 @@ export async function createCheckoutSession(
         error:
           data.error ||
           data.message ||
-          `Payment initialization failed with status ${res.status}.`,
+          `Payment initialization failed. Status ${res.status}`,
       };
     }
 
