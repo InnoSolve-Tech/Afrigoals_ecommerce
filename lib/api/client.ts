@@ -10,13 +10,20 @@ export function getApiBaseUrl() {
 
 export async function apiGet<T>(path: string, init?: RequestInit): Promise<T> {
   const baseUrl = getApiBaseUrl();
+  const shouldUseDefaultRevalidation = !init?.cache && !init?.next;
   const res = await fetch(`${baseUrl}${path}`, {
     ...init,
     headers: {
       Accept: "application/json",
       ...(init?.headers || {}),
     },
-    cache: "no-store",
+    ...(shouldUseDefaultRevalidation
+      ? {
+          next: {
+            revalidate: 300,
+          },
+        }
+      : {}),
   });
 
   if (!res.ok) {
