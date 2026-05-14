@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { defaultOgImage, siteDescription, siteName, siteUrl } from "@/lib/seo";
 import "./globals.css";
 import { Providers } from "./(app)/providers";
 
@@ -14,8 +15,43 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AfriGoals Store",
-  description: "AfriGoals E-Commerce App",
+  metadataBase: siteUrl,
+  title: {
+    default: siteName,
+    template: `%s | ${siteName}`,
+  },
+  description: siteDescription,
+  applicationName: siteName,
+  keywords: [
+    "Afrigoals",
+    "sports attire",
+    "sports equipment",
+    "football jerseys",
+    "running shoes",
+    "African sportswear",
+  ],
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    url: "/",
+    title: siteName,
+    description: siteDescription,
+    siteName,
+    images: [
+      {
+        url: defaultOgImage,
+        alt: `${siteName} logo`,
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: siteName,
+    description: siteDescription,
+    images: [defaultOgImage],
+  },
 };
 
 export default function RootLayout({
