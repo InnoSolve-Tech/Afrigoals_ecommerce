@@ -1,11 +1,14 @@
 // app/checkout/success/page.tsx
 import { redirect } from "next/navigation";
+import { buildMetadata } from "@/lib/seo";
 import { SuccessClient } from "./SuccessClient";
 
-export const metadata = {
-  title: "Order Confirmed | AfriGoals Store",
+export const metadata = buildMetadata({
+  title: "Order Confirmed",
   description: "Your order has been placed successfully",
-};
+  path: "/checkout/success",
+  index: false,
+});
 
 interface SuccessPageProps {
   searchParams: Promise<{
