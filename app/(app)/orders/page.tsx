@@ -1,15 +1,18 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import { authedFetch } from "@/lib/api/proxy";
 import type { ApiOrder } from "@/lib/api/types";
-import { formatDate, formatPrice } from "@/lib/utils";
 import { formatOrderStatus } from "@/lib/orders/status";
-import { Button } from "@/components/ui/button";
+import { buildMetadata } from "@/lib/seo";
+import { formatDate, formatPrice } from "@/lib/utils";
 
-export const metadata = {
-  title: "Your Orders | AfriGoals Store",
+export const metadata = buildMetadata({
+  title: "Your Orders",
   description: "View your order history",
-};
+  path: "/orders",
+  index: false,
+});
 
 export default async function OrdersPage() {
   const res = await authedFetch("/api/v1/orders/my");
