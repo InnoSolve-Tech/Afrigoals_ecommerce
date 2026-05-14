@@ -12,12 +12,15 @@ import { notFound, redirect } from "next/navigation";
 import { authedFetch } from "@/lib/api/proxy";
 import type { ApiOrder } from "@/lib/api/types";
 import { formatOrderStatus } from "@/lib/orders/status";
+import { buildMetadata } from "@/lib/seo";
 import { formatDate, formatPrice } from "@/lib/utils";
 
-export const metadata = {
-  title: "Order Details | AfriGoals Store",
+export const metadata = buildMetadata({
+  title: "Order Details",
   description: "View your order details",
-};
+  path: "/orders",
+  index: false,
+});
 
 interface OrderPageProps {
   params: Promise<{ id: string }>;
