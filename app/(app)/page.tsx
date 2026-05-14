@@ -7,6 +7,7 @@ import {
   getCatalogFeaturedProducts,
   queryCatalogProducts,
 } from "@/lib/catalog/query";
+import { absoluteUrl, buildMetadata, siteName } from "@/lib/seo";
 
 const sports = [
   { name: "Football", icon: "⚽" },
@@ -18,6 +19,13 @@ const sports = [
   { name: "Volleyball", icon: "🏐" },
   { name: "Gym", icon: "💪" },
 ];
+
+export const metadata = buildMetadata({
+  title: "Premium African Sports Attire and Equipment",
+  description:
+    "Shop premium sports attire, shoes, and accessories from trusted African vendors at Afrigoals.",
+  path: "/",
+});
 
 export default async function HomePage() {
   const categories = getCatalogCategories();
@@ -33,9 +41,34 @@ export default async function HomePage() {
     ...featuredProductCards,
     ...fallbackProductCards,
   ].slice(0, 8);
+  const homeStructuredData = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        name: siteName,
+        url: absoluteUrl("/"),
+        logo: absoluteUrl("/brand/afrigoals-logo.png"),
+      },
+      {
+        "@type": "WebSite",
+        name: siteName,
+        url: absoluteUrl("/"),
+        potentialAction: {
+          "@type": "SearchAction",
+          target: `${absoluteUrl("/products")}?q={search_term_string}`,
+          "query-input": "required name=search_term_string",
+        },
+      },
+    ],
+  };
+  const serializedHomeStructuredData = JSON.stringify(
+    homeStructuredData,
+  ).replace(/</g, "\\u003c");
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900">
+      <script type="application/ld+json">{serializedHomeStructuredData}</script>
       <section className="bg-gradient-to-r from-primary/10 to-primary/5 py-12 dark:from-primary/20 dark:to-primary/10 md:py-16 lg:py-20">
         <div className="mx-auto max-w-7xl px-4">
           <div className="mx-auto mb-12 max-w-4xl text-center">
