@@ -1,5 +1,13 @@
-import { EmptyState } from "@/components/ui/empty-state";
 import { Wrench } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
+import { buildMetadata } from "@/lib/seo";
+
+export const metadata = buildMetadata({
+  title: "Studio Unavailable",
+  description: "Sanity Studio is not available in this storefront.",
+  path: "/studio",
+  index: false,
+});
 
 export default function StudioDisabledPage() {
   return (
