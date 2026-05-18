@@ -7,6 +7,8 @@ import { AskAISimilarButton } from "@/components/app/AskAISimilarButton";
 import { formatPrice } from "@/lib/utils";
 import type { CatalogProduct } from "@/lib/catalog/types";
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+
 interface Review {
   _id: string;
   name: string;
@@ -110,11 +112,22 @@ export function ProductInfo({ product }: ProductInfoProps) {
   const fetchReviews = useCallback(async () => {
     try {
       setFetchingReviews(true);
-      const res = await fetch(`/api/reviews?productId=${product._id}`, {
-        cache: "no-store",
-      });
 
-      if (!res.ok) throw new Error("Failed to fetch reviews");
+      if (!API_BASE_URL) {
+        throw new Error("NEXT_PUBLIC_API_URL is missing");
+      }
+
+      const res = await fetch(
+        `${API_BASE_URL}/reviews?productId=${encodeURIComponent(product._id)}`,
+        {
+          method: "GET",
+          cache: "no-store",
+        },
+      );
+
+      if (!res.ok) {
+        throw new Error("Failed to fetch reviews");
+      }
 
       const data = await res.json();
       const fetched: Review[] = data.reviews ?? [];
@@ -126,7 +139,8 @@ export function ProductInfo({ product }: ProductInfoProps) {
               fetched.length
           : 0,
       );
-    } catch {
+    } catch (error) {
+      console.error("Fetch reviews failed:", error);
       setReviews([]);
       setAverageRating(0);
     } finally {
@@ -150,23 +164,34 @@ export function ProductInfo({ product }: ProductInfoProps) {
       return;
     }
 
+    if (!API_BASE_URL) {
+      setSubmitMessage({
+        type: "error",
+        text: "API URL is missing. Check NEXT_PUBLIC_API_URL.",
+      });
+      return;
+    }
+
     setSubmitting(true);
 
     try {
-      const res = await fetch("/api/reviews", {
+      const res = await fetch(`${API_BASE_URL}/reviews`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           productId: product._id,
-          name: reviewName,
+          name: reviewName.trim(),
           rating: reviewRating,
-          comment: reviewComment,
+          comment: reviewComment.trim(),
         }),
       });
 
-      if (!res.ok) throw new Error("Failed to submit review");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        throw new Error(errorData?.error ?? "Failed to submit review");
+      }
 
       setSubmitMessage({
         type: "success",
@@ -176,8 +201,11 @@ export function ProductInfo({ product }: ProductInfoProps) {
       setReviewName("");
       setReviewRating(5);
       setReviewComment("");
+
       await fetchReviews();
-    } catch {
+    } catch (error) {
+      console.error("Submit review failed:", error);
+
       setSubmitMessage({
         type: "error",
         text: "Failed to submit review. Please try again.",
@@ -209,6 +237,7 @@ export function ProductInfo({ product }: ProductInfoProps) {
           >
             {product.category.title}
           </Link>
+
           <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
             Afrigoals Store
           </span>
@@ -222,9 +251,11 @@ export function ProductInfo({ product }: ProductInfoProps) {
       {!fetchingReviews && reviews.length > 0 && (
         <div className="mt-4 flex flex-wrap items-center gap-2">
           {renderStars(Math.round(averageRating))}
+
           <span className="text-sm font-semibold text-foreground">
             {averageRating.toFixed(1)}
           </span>
+
           <span className="text-sm text-gray-600 dark:text-gray-400">
             ({reviews.length} {reviews.length === 1 ? "review" : "reviews"})
           </span>
@@ -274,6 +305,7 @@ export function ProductInfo({ product }: ProductInfoProps) {
       {product.description && (
         <div className="mt-8">
           <h2 className="mb-3 font-semibold text-foreground">Description</h2>
+
           <p className="leading-relaxed text-gray-700 dark:text-gray-300">
             {product.description}
           </p>
@@ -381,6 +413,7 @@ export function ProductInfo({ product }: ProductInfoProps) {
           stock={effectiveStock}
           redirectToCartOnAdd
         />
+
         <AskAISimilarButton productName={product.name ?? "this product"} />
       </div>
 
@@ -404,6 +437,7 @@ export function ProductInfo({ product }: ProductInfoProps) {
                 <span className="w-28 shrink-0 text-muted-foreground">
                   Material
                 </span>
+
                 <span className="capitalize text-foreground">
                   {product.material}
                 </span>
@@ -415,6 +449,7 @@ export function ProductInfo({ product }: ProductInfoProps) {
                 <span className="w-28 shrink-0 text-muted-foreground">
                   Color
                 </span>
+
                 <span className="capitalize text-foreground">
                   {product.color}
                 </span>
@@ -426,6 +461,7 @@ export function ProductInfo({ product }: ProductInfoProps) {
                 <span className="w-28 shrink-0 text-muted-foreground">
                   Dimensions
                 </span>
+
                 <span className="text-foreground">{product.dimensions}</span>
               </div>
             )}
@@ -435,6 +471,7 @@ export function ProductInfo({ product }: ProductInfoProps) {
                 <span className="w-28 shrink-0 text-muted-foreground">
                   Assembly
                 </span>
+
                 <span className="text-foreground">Required</span>
               </div>
             )}
@@ -488,6 +525,7 @@ export function ProductInfo({ product }: ProductInfoProps) {
         {!fetchingReviews && (
           <div className="mt-2 flex items-center gap-3">
             {renderStars(Math.round(averageRating))}
+
             <span className="text-sm text-muted-foreground">
               {averageRating.toFixed(1)} / 5 ({reviews.length}{" "}
               {reviews.length === 1 ? "review" : "reviews"})
@@ -505,19 +543,22 @@ export function ProductInfo({ product }: ProductInfoProps) {
           ) : (
             reviews.map((review) => (
               <div key={review._id} className="border-b border-border pb-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-4">
                   <div>
                     <span className="font-medium text-foreground">
                       {review.name}
                     </span>
+
                     {review.createdAt && (
                       <p className="text-xs text-muted-foreground">
                         {new Date(review.createdAt).toLocaleDateString()}
                       </p>
                     )}
                   </div>
+
                   {renderStars(review.rating)}
                 </div>
+
                 <p className="mt-2 text-sm text-muted-foreground">
                   {review.comment}
                 </p>
@@ -558,6 +599,7 @@ export function ProductInfo({ product }: ProductInfoProps) {
           <select
             value={reviewRating}
             onChange={(e) => setReviewRating(Number(e.target.value))}
+            disabled={submitting}
             className="rounded-md border border-border bg-card px-3 py-2 text-sm"
           >
             <option value={5}>★★★★★ — Excellent</option>

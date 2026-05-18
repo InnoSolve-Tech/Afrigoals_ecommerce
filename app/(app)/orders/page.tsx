@@ -11,11 +11,31 @@ export const metadata = {
   description: "View your order history",
 };
 
+type FlexibleApiOrder = ApiOrder & {
+  ID?: string;
+  order_number?: string;
+  created_at?: string;
+};
+
+function getOrderId(order: FlexibleApiOrder) {
+  return order.id || order.ID || "";
+}
+
+function getOrderNumber(order: FlexibleApiOrder) {
+  return order.orderNumber || order.order_number || getOrderId(order);
+}
+
+function getCreatedAt(order: FlexibleApiOrder) {
+  return order.createdAt || order.created_at || "";
+}
+
 export default async function OrdersPage() {
   const res = await authedFetch("/api/v1/orders/my");
+
   if (res.status === 401) {
     redirect("/signin?next=/orders");
   }
+
   if (!res.ok) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6 lg:px-8">
@@ -26,7 +46,7 @@ export default async function OrdersPage() {
     );
   }
 
-  const orders = (await res.json()) as ApiOrder[];
+  const orders = (await res.json()) as FlexibleApiOrder[];
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
@@ -39,6 +59,7 @@ export default async function OrdersPage() {
             Track and manage your purchases
           </p>
         </div>
+
         <Button asChild variant="outline">
           <Link href="/">Continue shopping</Link>
         </Button>
@@ -59,32 +80,52 @@ export default async function OrdersPage() {
                 <th className="px-4 py-3">Placed</th>
               </tr>
             </thead>
+
             <tbody>
-              {orders.map((o) => (
-                <tr
-                  key={o.id}
-                  className="border-t border-zinc-100 dark:border-zinc-900"
-                >
-                  <td className="px-4 py-3">
-                    <Link
-                      className="font-medium underline"
-                      href={`/orders/${o.id}`}
-                    >
-                      {o.orderNumber}
-                    </Link>
-                    <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                      {o.items?.length ?? 0} item(s)
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">{formatOrderStatus(o.status)}</td>
-                  <td className="px-4 py-3">
-                    {formatPrice(o.total, o.currency?.toLowerCase() || "ugx")}
-                  </td>
-                  <td className="px-4 py-3">
-                    {formatDate(o.createdAt, "datetime")}
-                  </td>
-                </tr>
-              ))}
+              {orders.map((o) => {
+                const orderId = getOrderId(o);
+                const orderNumber = getOrderNumber(o);
+                const createdAt = getCreatedAt(o);
+
+                if (!orderId) {
+                  return null;
+                }
+
+                return (
+                  <tr
+                    key={orderId}
+                    className="border-t border-zinc-100 dark:border-zinc-900"
+                  >
+                    <td className="px-4 py-3">
+                      <Link
+                        className="font-medium underline"
+                        href={`/orders/${encodeURIComponent(orderId)}`}
+                      >
+                        {orderNumber}
+                      </Link>
+
+                      <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                        {o.items?.length ?? 0} item(s)
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-3">
+                      {formatOrderStatus(o.status)}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      {formatPrice(
+                        o.total,
+                        o.currency?.toLowerCase() || "ugx",
+                      )}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      {createdAt ? formatDate(createdAt, "datetime") : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

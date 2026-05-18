@@ -12,6 +12,7 @@ export type ApiProduct = {
 };
 
 export type ApiOrderItem = {
+  total: number;
   id: string;
   orderId: string;
   productId: string;
