@@ -52,20 +52,44 @@ export default function AdminOrdersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, isAdmin, statusFilter]);
 
-  async function updateStatus(orderId: string, newStatus: string) {
-    setError(null);
-    const res = await fetch(`/api/admin/orders/${orderId}/status`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: newStatus }),
+ async function updateStatus(orderId: string, newStatus: string) {
+  setError(null);
+
+  if (!orderId || orderId === "undefined" || orderId === "null") {
+    setError("Invalid order id.");
+    console.error("Status update blocked: invalid order id", {
+      orderId,
+      newStatus,
     });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError((data as any)?.error || "Failed to update status");
-      return;
-    }
-    await loadOrders();
+    return;
   }
+
+  console.log("Calling status update API", {
+    url: `/api/admin/orders/${orderId}/status`,
+    orderId,
+    newStatus,
+  });
+
+  const res = await fetch(`/api/admin/orders/${encodeURIComponent(orderId)}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status: newStatus }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  console.log("Status update API response", {
+    status: res.status,
+    data,
+  });
+
+  if (!res.ok) {
+    setError((data as any)?.error || "Failed to update status");
+    return;
+  }
+
+  await loadOrders();
+}
 
   if (status === "loading")
     return <p className="text-sm text-muted-foreground">Loading…</p>;

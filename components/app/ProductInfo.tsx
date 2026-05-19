@@ -6,6 +6,10 @@ import { AddToCartButton } from "@/components/app/AddToCartButton";
 import { AskAISimilarButton } from "@/components/app/AskAISimilarButton";
 import { formatPrice } from "@/lib/utils";
 import type { CatalogProduct } from "@/lib/catalog/types";
+import type {
+  ApiProductAccessoryLink,
+  CartItemAccessory,
+} from "@/lib/api/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -109,6 +113,15 @@ export function ProductInfo({ product }: ProductInfoProps) {
     text: string;
   } | null>(null);
 
+  const [accessoryLinks, setAccessoryLinks] = useState<
+    ApiProductAccessoryLink[]
+  >([]);
+  const [fetchingAccessories, setFetchingAccessories] = useState(true);
+  const [selectedAccessories, setSelectedAccessories] = useState<
+    CartItemAccessory[]
+  >([]);
+  const [accessoryError, setAccessoryError] = useState<string | null>(null);
+
   const fetchReviews = useCallback(async () => {
     try {
       setFetchingReviews(true);
@@ -148,9 +161,57 @@ export function ProductInfo({ product }: ProductInfoProps) {
     }
   }, [product._id]);
 
+  const fetchProductAccessories = useCallback(async () => {
+    try {
+      setFetchingAccessories(true);
+      setAccessoryError(null);
+
+      const res = await fetch(
+        `/api/products/${encodeURIComponent(product._id)}/accessories`,
+        {
+          method: "GET",
+          cache: "no-store",
+        },
+      );
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data?.error || "Failed to fetch product accessories");
+      }
+
+      const links = data as ApiProductAccessoryLink[];
+
+      setAccessoryLinks(links);
+
+      const requiredAccessories: CartItemAccessory[] = links
+        .filter((link) => link.isRequired && link.accessory?.id)
+        .map((link) => ({
+          accessoryId: link.accessory.id,
+          quantity: 1,
+          text: "",
+          number: "",
+          notes: "",
+        }));
+
+      setSelectedAccessories(requiredAccessories);
+    } catch (error) {
+      console.error("Fetch product accessories failed:", error);
+      setAccessoryLinks([]);
+      setSelectedAccessories([]);
+      setAccessoryError("Failed to load product accessories.");
+    } finally {
+      setFetchingAccessories(false);
+    }
+  }, [product._id]);
+
   useEffect(() => {
     fetchReviews();
   }, [fetchReviews]);
+
+  useEffect(() => {
+    fetchProductAccessories();
+  }, [fetchProductAccessories]);
 
   async function submitReview(e: React.FormEvent) {
     e.preventDefault();
@@ -225,6 +286,80 @@ export function ProductInfo({ product }: ProductInfoProps) {
         ))}
       </div>
     );
+  }
+
+  function isAccessorySelected(accessoryId: string) {
+    return selectedAccessories.some((item) => item.accessoryId === accessoryId);
+  }
+
+  function getSelectedAccessory(accessoryId: string) {
+    return selectedAccessories.find((item) => item.accessoryId === accessoryId);
+  }
+
+  function toggleAccessory(accessoryId: string, isRequired: boolean) {
+    setSelectedAccessories((current) => {
+      const exists = current.some((item) => item.accessoryId === accessoryId);
+
+      if (exists && !isRequired) {
+        return current.filter((item) => item.accessoryId !== accessoryId);
+      }
+
+      if (exists) {
+        return current;
+      }
+
+      return [
+        ...current,
+        {
+          accessoryId,
+          quantity: 1,
+          text: "",
+          number: "",
+          notes: "",
+        },
+      ];
+    });
+  }
+
+  function updateSelectedAccessory(
+    accessoryId: string,
+    patch: Partial<CartItemAccessory>,
+  ) {
+    setSelectedAccessories((current) =>
+      current.map((item) =>
+        item.accessoryId === accessoryId
+          ? {
+              ...item,
+              ...patch,
+            }
+          : item,
+      ),
+    );
+  }
+
+  function validateAccessories(): string | null {
+    for (const link of accessoryLinks) {
+      const accessory = link.accessory;
+      const selected = getSelectedAccessory(accessory.id);
+
+      if (link.isRequired && !selected) {
+        return `${accessory.name} is required.`;
+      }
+
+      if (!selected) {
+        continue;
+      }
+
+      if (accessory.requiresText && !selected.text?.trim()) {
+        return `${accessory.name} requires text/name.`;
+      }
+
+      if (accessory.requiresNumber && !selected.number?.trim()) {
+        return `${accessory.name} requires a number.`;
+      }
+    }
+
+    return null;
   }
 
   return (
@@ -403,6 +538,166 @@ export function ProductInfo({ product }: ProductInfoProps) {
         </div>
       )}
 
+      {fetchingAccessories ? (
+        <div className="mt-6 rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
+          Loading product accessories...
+        </div>
+      ) : accessoryError ? (
+        <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+          {accessoryError}
+        </div>
+      ) : accessoryLinks.length > 0 ? (
+        <div className="mt-6 rounded-lg border border-border bg-card p-4">
+          <div className="mb-4">
+            <h2 className="font-semibold text-foreground">
+              Customize your product
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Select available accessories, branding, badges, or kit extras for
+              this product.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            {accessoryLinks.map((link) => {
+              const accessory = link.accessory;
+              const selected = isAccessorySelected(accessory.id);
+              const selectedItem = getSelectedAccessory(accessory.id);
+
+              return (
+                <div
+                  key={link.id}
+                  className={`rounded-lg border p-4 ${
+                    selected
+                      ? "border-primary bg-primary/5"
+                      : "border-border bg-background"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      disabled={link.isRequired}
+                      onChange={() =>
+                        toggleAccessory(accessory.id, link.isRequired)
+                      }
+                      className="mt-1"
+                    />
+
+                    <div className="flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium text-foreground">
+                          {accessory.name}
+                        </p>
+
+                        {link.isRequired ? (
+                          <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300">
+                            Required
+                          </span>
+                        ) : null}
+
+                        {accessory.isBranding ? (
+                          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                            Branding
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {accessory.code} • {formatPrice(accessory.price, "ugx")}
+                      </p>
+
+                      {accessory.description ? (
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {accessory.description}
+                        </p>
+                      ) : null}
+
+                      {selected ? (
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground">
+                              Quantity
+                            </label>
+                            <input
+                              type="number"
+                              min={1}
+                              value={selectedItem?.quantity ?? 1}
+                              onChange={(e) =>
+                                updateSelectedAccessory(accessory.id, {
+                                  quantity: Math.max(
+                                    1,
+                                    Number(e.target.value) || 1,
+                                  ),
+                                })
+                              }
+                              className="mt-1 w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
+                            />
+                          </div>
+
+                          {accessory.requiresText ? (
+                            <div>
+                              <label className="text-xs font-medium text-muted-foreground">
+                                Text / Name
+                              </label>
+                              <input
+                                value={selectedItem?.text ?? ""}
+                                onChange={(e) =>
+                                  updateSelectedAccessory(accessory.id, {
+                                    text: e.target.value,
+                                  })
+                                }
+                                placeholder="Example: TREVOR"
+                                className="mt-1 w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
+                              />
+                            </div>
+                          ) : null}
+
+                          {accessory.requiresNumber ? (
+                            <div>
+                              <label className="text-xs font-medium text-muted-foreground">
+                                Number
+                              </label>
+                              <input
+                                value={selectedItem?.number ?? ""}
+                                onChange={(e) =>
+                                  updateSelectedAccessory(accessory.id, {
+                                    number: e.target.value,
+                                  })
+                                }
+                                placeholder="Example: 10"
+                                inputMode="numeric"
+                                className="mt-1 w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
+                              />
+                            </div>
+                          ) : null}
+
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground">
+                              Notes
+                            </label>
+                            <input
+                              value={selectedItem?.notes ?? ""}
+                              onChange={(e) =>
+                                updateSelectedAccessory(accessory.id, {
+                                  notes: e.target.value,
+                                })
+                              }
+                              placeholder="Optional"
+                              className="mt-1 w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
+                            />
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
       <div className="mt-6 flex flex-col gap-3">
         <AddToCartButton
           productId={product._id}
@@ -411,6 +706,8 @@ export function ProductInfo({ product }: ProductInfoProps) {
           price={price}
           image={imageUrl}
           stock={effectiveStock}
+          accessories={selectedAccessories}
+          validateBeforeAdd={validateAccessories}
           redirectToCartOnAdd
         />
 

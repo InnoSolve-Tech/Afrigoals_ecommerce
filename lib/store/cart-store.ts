@@ -1,5 +1,6 @@
 import { persist } from "zustand/middleware";
 import { createStore } from "zustand/vanilla";
+import { CartItemAccessory } from "../api/types";
 
 // Types
 export interface CartItem {
@@ -9,6 +10,8 @@ export interface CartItem {
   price: number;
   quantity: number;
   image?: string;
+  accessories?: CartItemAccessory[];
+
 }
 
 export interface CartState {

@@ -38,7 +38,31 @@ export function CheckoutClient() {
   );
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
 
+  const [deliveryContactName, setDeliveryContactName] = useState("");
+  const [deliveryContactPhone, setDeliveryContactPhone] = useState("");
+  const [deliveryAltPhone, setDeliveryAltPhone] = useState("");
+  const [deliveryNote, setDeliveryNote] = useState("");
+
   const total = totalPrice + (deliveryFee ?? 0);
+
+  const deliveryQuoteReady =
+    deliveryAddress.trim() !== "" &&
+    deliveryLat !== null &&
+    deliveryLng !== null &&
+    deliveryFee !== null &&
+    deliveryDistanceKm !== null;
+
+  const deliveryContactReady =
+    deliveryContactName.trim() !== "" && deliveryContactPhone.trim() !== "";
+
+  function resetDeliveryQuoteAndContact() {
+    setDeliveryFee(null);
+    setDeliveryDistanceKm(null);
+    setDeliveryContactName("");
+    setDeliveryContactPhone("");
+    setDeliveryAltPhone("");
+    setDeliveryNote("");
+  }
 
   const handleAddressSelect = ({
     address,
@@ -53,6 +77,7 @@ export function CheckoutClient() {
     setDeliveryLat(lat);
     setDeliveryLng(lng);
     setDeliveryError(null);
+    resetDeliveryQuoteAndContact();
 
     startTransition(async () => {
       const result = await getDeliveryQuote({ lat, lng });
@@ -69,8 +94,22 @@ export function CheckoutClient() {
         return;
       }
 
-      setDeliveryFee(result.fee ?? null);
-      setDeliveryDistanceKm(result.distanceKm ?? null);
+      if (typeof result.fee !== "number") {
+        setDeliveryError("Invalid delivery fee returned.");
+        setDeliveryFee(null);
+        setDeliveryDistanceKm(null);
+        return;
+      }
+
+      if (typeof result.distanceKm !== "number") {
+        setDeliveryError("Invalid delivery distance returned.");
+        setDeliveryFee(null);
+        setDeliveryDistanceKm(null);
+        return;
+      }
+
+      setDeliveryFee(result.fee);
+      setDeliveryDistanceKm(result.distanceKm);
     });
   };
 
@@ -78,10 +117,8 @@ export function CheckoutClient() {
     hasStockIssues ||
     isLoading ||
     isCalculating ||
-    !deliveryAddress ||
-    deliveryLat == null ||
-    deliveryLng == null ||
-    deliveryFee == null;
+    !deliveryQuoteReady ||
+    !deliveryContactReady;
 
   if (items.length === 0) {
     return (
@@ -115,6 +152,7 @@ export function CheckoutClient() {
             <ArrowLeft className="mr-2 h-4 w-4" />
             Continue Shopping
           </Link>
+
           <h1 className="mt-4 text-3xl font-bold text-zinc-900 dark:text-zinc-100">
             Checkout
           </h1>
@@ -126,6 +164,7 @@ export function CheckoutClient() {
               <h2 className="font-semibold text-zinc-900 dark:text-zinc-100">
                 Delivery Details
               </h2>
+
               <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
                 Search for the address, click on the map, or drag the pin to the
                 exact delivery location.
@@ -134,7 +173,7 @@ export function CheckoutClient() {
               <div className="mt-4 space-y-4">
                 <DeliveryMapPicker onSelect={handleAddressSelect} />
 
-                {deliveryAddress && (
+                {deliveryAddress ? (
                   <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm dark:border-zinc-800 dark:bg-zinc-900">
                     <p className="font-medium text-zinc-900 dark:text-zinc-100">
                       Selected address
@@ -143,39 +182,135 @@ export function CheckoutClient() {
                       {deliveryAddress}
                     </p>
                   </div>
-                )}
+                ) : null}
 
-                {isCalculating && (
+                {isCalculating ? (
                   <div className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     <span>Calculating delivery...</span>
                   </div>
-                )}
+                ) : null}
 
-                {deliveryDistanceKm !== null && (
+                {deliveryDistanceKm !== null ? (
                   <p className="text-sm text-zinc-500 dark:text-zinc-400">
                     Distance: {deliveryDistanceKm.toFixed(1)} km
                   </p>
-                )}
+                ) : null}
 
-                {deliveryFee !== null && (
+                {deliveryFee !== null ? (
                   <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                     Delivery: {formatPrice(deliveryFee)}
                   </p>
-                )}
+                ) : null}
 
-                {deliveryError && (
+                {deliveryError ? (
                   <p className="text-sm text-red-600 dark:text-red-400">
                     {deliveryError}
                   </p>
-                )}
+                ) : null}
               </div>
             </div>
+
+            {deliveryQuoteReady ? (
+              <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
+                <h2 className="font-semibold text-zinc-900 dark:text-zinc-100">
+                  Receiver Contact Information
+                </h2>
+
+                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                  Add the person who will receive the product. This can be you
+                  or someone else.
+                </p>
+
+                <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm dark:border-zinc-800 dark:bg-zinc-900">
+                  <div className="flex justify-between gap-4">
+                    <span className="text-zinc-500 dark:text-zinc-400">
+                      Delivery distance
+                    </span>
+                    <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                      {deliveryDistanceKm.toFixed(1)} km
+                    </span>
+                  </div>
+
+                  <div className="mt-2 flex justify-between gap-4">
+                    <span className="text-zinc-500 dark:text-zinc-400">
+                      Delivery fee
+                    </span>
+                    <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                      {formatPrice(deliveryFee)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                      Receiver name
+                    </label>
+                    <input
+                      value={deliveryContactName}
+                      onChange={(e) => setDeliveryContactName(e.target.value)}
+                      placeholder="Example: Trevor Simon"
+                      autoComplete="name"
+                      className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                      Receiver phone
+                    </label>
+                    <input
+                      value={deliveryContactPhone}
+                      onChange={(e) => setDeliveryContactPhone(e.target.value)}
+                      placeholder="Example: 0700000000"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                      Alternative phone
+                    </label>
+                    <input
+                      value={deliveryAltPhone}
+                      onChange={(e) => setDeliveryAltPhone(e.target.value)}
+                      placeholder="Optional"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                      Delivery note
+                    </label>
+                    <input
+                      value={deliveryNote}
+                      onChange={(e) => setDeliveryNote(e.target.value)}
+                      placeholder="Example: Call before arrival"
+                      className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
+                    />
+                  </div>
+                </div>
+
+                {!deliveryContactReady ? (
+                  <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">
+                    Receiver name and receiver phone are required before
+                    checkout.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
 
             <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
               <h2 className="font-semibold text-zinc-900 dark:text-zinc-100">
                 Payment Method
               </h2>
+
               <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
                 Choose how the customer will pay for this order.
               </p>
@@ -200,6 +335,7 @@ export function CheckoutClient() {
                         payment methods.
                       </p>
                     </div>
+
                     <div
                       className={`mt-1 h-4 w-4 rounded-full border ${
                         paymentMethod === "pesapal"
@@ -228,6 +364,7 @@ export function CheckoutClient() {
                         Customer pays when the order is delivered.
                       </p>
                     </div>
+
                     <div
                       className={`mt-1 h-4 w-4 rounded-full border ${
                         paymentMethod === "cod"
@@ -247,7 +384,7 @@ export function CheckoutClient() {
                 </h2>
               </div>
 
-              {hasStockIssues && !isLoading && (
+              {hasStockIssues && !isLoading ? (
                 <div className="mx-6 mt-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
                   <AlertTriangle className="h-5 w-5 shrink-0" />
                   <span>
@@ -255,16 +392,16 @@ export function CheckoutClient() {
                     proceeding.
                   </span>
                 </div>
-              )}
+              ) : null}
 
-              {isLoading && (
+              {isLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
                   <span className="ml-2 text-sm text-zinc-500">
                     Verifying stock...
                   </span>
                 </div>
-              )}
+              ) : null}
 
               <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
                 {items.map((item) => {
@@ -300,20 +437,23 @@ export function CheckoutClient() {
                           <h3 className="font-medium text-zinc-900 dark:text-zinc-100">
                             {item.name}
                           </h3>
+
                           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
                             Qty: {item.quantity}
                           </p>
-                          {stockInfo?.isOutOfStock && (
+
+                          {stockInfo?.isOutOfStock ? (
                             <p className="mt-1 text-sm font-medium text-red-600">
                               Out of stock
                             </p>
-                          )}
+                          ) : null}
+
                           {stockInfo?.exceedsStock &&
-                            !stockInfo.isOutOfStock && (
-                              <p className="mt-1 text-sm font-medium text-amber-600">
-                                Only {stockInfo.currentStock} available
-                              </p>
-                            )}
+                          !stockInfo.isOutOfStock ? (
+                            <p className="mt-1 text-sm font-medium text-amber-600">
+                              Only {stockInfo.currentStock} available
+                            </p>
+                          ) : null}
                         </div>
                       </div>
 
@@ -321,11 +461,12 @@ export function CheckoutClient() {
                         <p className="font-medium text-zinc-900 dark:text-zinc-100">
                           {formatPrice(item.price * item.quantity)}
                         </p>
-                        {item.quantity > 1 && (
+
+                        {item.quantity > 1 ? (
                           <p className="text-sm text-zinc-500">
                             {formatPrice(item.price)} each
                           </p>
-                        )}
+                        ) : null}
                       </div>
                     </div>
                   );
@@ -372,6 +513,20 @@ export function CheckoutClient() {
                   </span>
                 </div>
 
+                {deliveryQuoteReady ? (
+                  <div className="rounded-lg bg-zinc-50 p-3 text-xs dark:bg-zinc-900">
+                    <p className="font-medium text-zinc-900 dark:text-zinc-100">
+                      Receiver
+                    </p>
+                    <p className="mt-1 text-zinc-600 dark:text-zinc-400">
+                      {deliveryContactName || "Receiver name required"}
+                    </p>
+                    <p className="text-zinc-600 dark:text-zinc-400">
+                      {deliveryContactPhone || "Receiver phone required"}
+                    </p>
+                  </div>
+                ) : null}
+
                 <div className="border-t border-zinc-200 pt-4 dark:border-zinc-800">
                   <div className="flex justify-between text-base font-semibold">
                     <span className="text-zinc-900 dark:text-zinc-100">
@@ -386,19 +541,23 @@ export function CheckoutClient() {
 
               <div className="mt-6">
                 <CheckoutButton
-                  disabled={isCheckoutDisabled}
-                  paymentMethod={paymentMethod}
-                  deliveryAddress={deliveryAddress}
-                  deliveryLat={deliveryLat}
-                  deliveryLng={deliveryLng}
-                  deliveryFee={deliveryFee}
-                  deliveryDistanceKm={deliveryDistanceKm}
-                />
+  disabled={isCheckoutDisabled}
+  paymentMethod={paymentMethod}
+  deliveryAddress={deliveryAddress}
+  deliveryLat={deliveryLat}
+  deliveryLng={deliveryLng}
+  deliveryFee={deliveryFee}
+  deliveryDistanceKm={deliveryDistanceKm}
+  deliveryContactName={deliveryContactName}
+  deliveryContactPhone={deliveryContactPhone}
+  deliveryAltPhone={deliveryAltPhone}
+  deliveryNote={deliveryNote}
+/>
               </div>
 
               <p className="mt-4 text-center text-xs text-zinc-500 dark:text-zinc-400">
                 {paymentMethod === "pesapal"
-                  ? "You&apos;ll be redirected to Pesapal&apos;s secure checkout."
+                  ? "You'll be redirected to Pesapal's secure checkout."
                   : "You will pay in cash when your order is delivered."}
               </p>
             </div>

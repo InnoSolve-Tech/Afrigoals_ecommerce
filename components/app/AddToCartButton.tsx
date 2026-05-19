@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useCartActions, useCartItem } from "@/lib/store/cart-store-provider";
+import type { CartItemAccessory } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
 interface AddToCartButtonProps {
@@ -16,6 +17,9 @@ interface AddToCartButtonProps {
   stock: number;
   className?: string;
   redirectToCartOnAdd?: boolean;
+
+  accessories?: CartItemAccessory[];
+  validateBeforeAdd?: () => string | null;
 }
 
 export function AddToCartButton({
@@ -27,9 +31,19 @@ export function AddToCartButton({
   stock,
   className,
   redirectToCartOnAdd = true,
+  accessories = [],
+  validateBeforeAdd,
 }: AddToCartButtonProps) {
   const router = useRouter();
   const { addItem, updateQuantity } = useCartActions();
+
+  /**
+   * Important:
+   * If the same product can be added with different accessories,
+   * useCartItem(productId) is not enough long-term.
+   *
+   * For now, this keeps your existing cart behavior.
+   */
   const cartItem = useCartItem(productId);
 
   const quantityInCart = cartItem?.quantity ?? 0;
@@ -37,13 +51,39 @@ export function AddToCartButton({
   const isAtMax = quantityInCart >= stock;
 
   const handleAdd = () => {
-    if (quantityInCart < stock) {
-      addItem({ productId, slug, name, price, image }, 1);
-      toast.success(`Added ${name}`);
+    if (isOutOfStock) {
+      toast.error("This product is out of stock.");
+      return;
+    }
 
-      if (redirectToCartOnAdd) {
-        router.push("/cart");
-      }
+    if (quantityInCart >= stock) {
+      toast.error("You have reached the available stock limit.");
+      return;
+    }
+
+    const validationError = validateBeforeAdd?.() ?? null;
+
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
+    addItem(
+      {
+        productId,
+        slug,
+        name,
+        price,
+        image,
+        accessories,
+      },
+      1,
+    );
+
+    toast.success(`Added ${name}`);
+
+    if (redirectToCartOnAdd) {
+      router.push("/cart");
     }
   };
 
@@ -53,7 +93,6 @@ export function AddToCartButton({
     }
   };
 
-  // Out of stock
   if (isOutOfStock) {
     return (
       <Button
@@ -66,7 +105,6 @@ export function AddToCartButton({
     );
   }
 
-  // Not in cart - show Add to Basket button
   if (quantityInCart === 0) {
     return (
       <Button
@@ -82,7 +120,6 @@ export function AddToCartButton({
     );
   }
 
-  // In cart - show quantity controls
   return (
     <div
       className={cn(
@@ -98,9 +135,11 @@ export function AddToCartButton({
       >
         <Minus className="h-4 w-4" />
       </Button>
+
       <span className="flex-1 text-center text-sm font-semibold tabular-nums">
         {quantityInCart}
       </span>
+
       <Button
         variant="ghost"
         size="icon"

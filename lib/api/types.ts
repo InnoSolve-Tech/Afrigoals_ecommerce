@@ -11,6 +11,18 @@ export type ApiProduct = {
   updatedAt?: string;
 };
 
+export type ApiOrderItemAccessory = {
+  accessoryId: string;
+  code: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+  text?: string;
+  number?: string;
+  notes?: string;
+};
+
 export type ApiOrderItem = {
   total: number;
   id: string;
@@ -20,6 +32,13 @@ export type ApiOrderItem = {
   imageUrl?: string;
   priceAtPurchase: number;
   quantity: number;
+
+  accessoriesJson?: string;
+  accessoriesFee?: number;
+  lineSubtotal?: number;
+
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type ApiOrderStatusEvent = {
@@ -50,4 +69,41 @@ export type ApiOrder = {
   statusEvents?: ApiOrderStatusEvent[];
   createdAt: string;
   updatedAt: string;
+  deliveryContactName?: string;
+  deliveryContactPhone?: string;
+  deliveryAltPhone?: string;
+  deliveryNote?: string;
+};
+
+
+export type ApiProductAccessory = {
+  id: string;
+  name: string;
+  code: string;
+  description?: string;
+  price: number;
+  appliesToCategory?: string;
+  isBranding: boolean;
+  requiresText: boolean;
+  requiresNumber: boolean;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type ApiProductAccessoryLink = {
+  id: string;
+  productId: string;
+  accessoryId: string;
+  isRequired: boolean;
+  sortOrder: number;
+  accessory: ApiProductAccessory;
+};
+
+export type CartItemAccessory = {
+  accessoryId: string;
+  quantity: number;
+  text?: string;
+  number?: string;
+  notes?: string;
 };
