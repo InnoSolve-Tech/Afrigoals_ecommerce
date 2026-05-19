@@ -106,4 +106,8 @@ export type CartItemAccessory = {
   text?: string;
   number?: string;
   notes?: string;
+
+  name?: string;
+  code?: string;
+  unitPrice?: number;
 };

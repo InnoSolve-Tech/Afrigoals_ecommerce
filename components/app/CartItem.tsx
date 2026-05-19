@@ -16,8 +16,55 @@ interface CartItemProps {
   stockInfo?: StockInfo;
 }
 
+type CartAccessoryLike = {
+  accessoryId: string;
+  quantity?: number;
+  text?: string;
+  number?: string;
+  notes?: string;
+  name?: string;
+  code?: string;
+  unitPrice?: number;
+  price?: number;
+};
+
 function hasAccessories(item: CartItemType) {
   return Array.isArray(item.accessories) && item.accessories.length > 0;
+}
+
+function getAccessoryUnitPrice(accessory: CartAccessoryLike) {
+  return Number(accessory.unitPrice ?? accessory.price ?? 0);
+}
+
+function getAccessoryQuantity(accessory: CartAccessoryLike) {
+  const quantity = Number(accessory.quantity || 1);
+  return Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+}
+
+function getItemAccessoriesTotal(item: CartItemType) {
+  if (!Array.isArray(item.accessories)) {
+    return 0;
+  }
+
+  const perProductAccessoriesTotal = item.accessories.reduce(
+    (sum, accessory) => {
+      const unitPrice = getAccessoryUnitPrice(accessory);
+      const accessoryQuantity = getAccessoryQuantity(accessory);
+
+      return sum + unitPrice * accessoryQuantity;
+    },
+    0,
+  );
+
+  return perProductAccessoriesTotal * Number(item.quantity || 1);
+}
+
+function getItemBaseTotal(item: CartItemType) {
+  return Number(item.price || 0) * Number(item.quantity || 1);
+}
+
+function getItemLineTotal(item: CartItemType) {
+  return getItemBaseTotal(item) + getItemAccessoriesTotal(item);
 }
 
 export function CartItem({ item, stockInfo }: CartItemProps) {
@@ -28,9 +75,9 @@ export function CartItem({ item, stockInfo }: CartItemProps) {
   const currentStock = stockInfo?.currentStock ?? 999;
   const hasIssue = isOutOfStock || exceedsStock;
 
-  // Frontend currently does not have accessory prices in the cart item.
-  // Backend will calculate real order totals from DB during checkout.
-  const lineTotal = item.price * item.quantity;
+  const baseTotal = getItemBaseTotal(item);
+  const accessoriesTotal = getItemAccessoriesTotal(item);
+  const lineTotal = getItemLineTotal(item);
 
   return (
     <div
@@ -52,7 +99,7 @@ export function CartItem({ item, stockInfo }: CartItemProps) {
             alt={item.name}
             fill
             className="object-cover"
-            sizes="80px"
+            sizes="112px"
           />
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-zinc-400">
@@ -80,51 +127,86 @@ export function CartItem({ item, stockInfo }: CartItemProps) {
 
             {hasAccessories(item) ? (
               <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm dark:border-zinc-700 dark:bg-zinc-900">
-                <p className="mb-2 font-medium text-zinc-900 dark:text-zinc-100">
-                  Selected accessories
-                </p>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="font-medium text-zinc-900 dark:text-zinc-100">
+                    Selected accessories
+                  </p>
+
+                  <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                    {formatPrice(accessoriesTotal)}
+                  </p>
+                </div>
 
                 <div className="space-y-2">
-                  {item.accessories?.map((accessory) => (
-                    <div
-                      key={accessory.accessoryId}
-                      className="rounded-md bg-white p-2 text-xs text-zinc-600 dark:bg-zinc-950 dark:text-zinc-300"
-                    >
-                      <div className="flex justify-between gap-3">
-                        <span className="font-medium">
-                          Accessory ID: {accessory.accessoryId}
-                        </span>
-                        <span>Qty: {accessory.quantity}</span>
-                      </div>
+                  {item.accessories?.map((accessory) => {
+                    const unitPrice = getAccessoryUnitPrice(accessory);
+                    const accessoryQuantity = getAccessoryQuantity(accessory);
+                    const accessoryTotal =
+                      unitPrice * accessoryQuantity * Number(item.quantity || 1);
 
-                      {accessory.text ? (
-                        <p className="mt-1">
-                          Text/name:{" "}
-                          <span className="font-medium">{accessory.text}</span>
-                        </p>
-                      ) : null}
-
-                      {accessory.number ? (
-                        <p className="mt-1">
-                          Number:{" "}
-                          <span className="font-medium">
-                            {accessory.number}
+                    return (
+                      <div
+                        key={`${accessory.accessoryId}-${accessory.text || ""}-${accessory.number || ""}`}
+                        className="rounded-md bg-white p-2 text-xs text-zinc-600 dark:bg-zinc-950 dark:text-zinc-300"
+                      >
+                        <div className="flex justify-between gap-3">
+                          <span className="font-medium text-zinc-800 dark:text-zinc-100">
+                            {accessory.name ||
+                              accessory.code ||
+                              `Accessory ID: ${accessory.accessoryId}`}
                           </span>
-                        </p>
-                      ) : null}
 
-                      {accessory.notes ? (
+                          <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                            {formatPrice(accessoryTotal)}
+                          </span>
+                        </div>
+
                         <p className="mt-1">
-                          Notes:{" "}
-                          <span className="font-medium">{accessory.notes}</span>
+                          Qty:{" "}
+                          <span className="font-medium">
+                            {accessoryQuantity}
+                          </span>
+
+                          {unitPrice > 0 ? (
+                            <span> • {formatPrice(unitPrice)} each</span>
+                          ) : (
+                            <span> • Price missing</span>
+                          )}
                         </p>
-                      ) : null}
-                    </div>
-                  ))}
+
+                        {accessory.text ? (
+                          <p className="mt-1">
+                            Text/name:{" "}
+                            <span className="font-medium">
+                              {accessory.text}
+                            </span>
+                          </p>
+                        ) : null}
+
+                        {accessory.number ? (
+                          <p className="mt-1">
+                            Number:{" "}
+                            <span className="font-medium">
+                              {accessory.number}
+                            </span>
+                          </p>
+                        ) : null}
+
+                        {accessory.notes ? (
+                          <p className="mt-1">
+                            Notes:{" "}
+                            <span className="font-medium">
+                              {accessory.notes}
+                            </span>
+                          </p>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                 </div>
 
                 <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-                  Accessory pricing is finalized at checkout.
+                  Final accessory pricing is verified again at checkout.
                 </p>
               </div>
             ) : null}
@@ -157,10 +239,28 @@ export function CartItem({ item, stockInfo }: CartItemProps) {
 
           <div className="flex flex-col gap-3 lg:items-end">
             <div className="text-sm text-zinc-500 dark:text-zinc-400">
-              Line total{" "}
-              <span className="ml-2 text-lg font-bold text-foreground">
-                {formatPrice(lineTotal)}
-              </span>
+              <div className="flex justify-between gap-4 lg:justify-end">
+                <span>Products</span>
+                <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                  {formatPrice(baseTotal)}
+                </span>
+              </div>
+
+              {accessoriesTotal > 0 ? (
+                <div className="mt-1 flex justify-between gap-4 lg:justify-end">
+                  <span>Accessories</span>
+                  <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                    {formatPrice(accessoriesTotal)}
+                  </span>
+                </div>
+              ) : null}
+
+              <div className="mt-2 flex justify-between gap-4 lg:justify-end">
+                <span>Line total</span>
+                <span className="text-lg font-bold text-foreground">
+                  {formatPrice(lineTotal)}
+                </span>
+              </div>
             </div>
 
             {!isOutOfStock && (
