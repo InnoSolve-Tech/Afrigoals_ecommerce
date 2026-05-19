@@ -16,6 +16,10 @@ interface CartItemProps {
   stockInfo?: StockInfo;
 }
 
+function hasAccessories(item: CartItemType) {
+  return Array.isArray(item.accessories) && item.accessories.length > 0;
+}
+
 export function CartItem({ item, stockInfo }: CartItemProps) {
   const { removeItem } = useCartActions();
 
@@ -23,6 +27,9 @@ export function CartItem({ item, stockInfo }: CartItemProps) {
   const exceedsStock = stockInfo?.exceedsStock ?? false;
   const currentStock = stockInfo?.currentStock ?? 999;
   const hasIssue = isOutOfStock || exceedsStock;
+
+  // Frontend currently does not have accessory prices in the cart item.
+  // Backend will calculate real order totals from DB during checkout.
   const lineTotal = item.price * item.quantity;
 
   return (
@@ -66,10 +73,63 @@ export function CartItem({ item, stockInfo }: CartItemProps) {
             >
               {item.name}
             </Link>
+
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
               Ready for checkout
             </p>
+
+            {hasAccessories(item) ? (
+              <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+                <p className="mb-2 font-medium text-zinc-900 dark:text-zinc-100">
+                  Selected accessories
+                </p>
+
+                <div className="space-y-2">
+                  {item.accessories?.map((accessory) => (
+                    <div
+                      key={accessory.accessoryId}
+                      className="rounded-md bg-white p-2 text-xs text-zinc-600 dark:bg-zinc-950 dark:text-zinc-300"
+                    >
+                      <div className="flex justify-between gap-3">
+                        <span className="font-medium">
+                          Accessory ID: {accessory.accessoryId}
+                        </span>
+                        <span>Qty: {accessory.quantity}</span>
+                      </div>
+
+                      {accessory.text ? (
+                        <p className="mt-1">
+                          Text/name:{" "}
+                          <span className="font-medium">{accessory.text}</span>
+                        </p>
+                      ) : null}
+
+                      {accessory.number ? (
+                        <p className="mt-1">
+                          Number:{" "}
+                          <span className="font-medium">
+                            {accessory.number}
+                          </span>
+                        </p>
+                      ) : null}
+
+                      {accessory.notes ? (
+                        <p className="mt-1">
+                          Notes:{" "}
+                          <span className="font-medium">{accessory.notes}</span>
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+
+                <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                  Accessory pricing is finalized at checkout.
+                </p>
+              </div>
+            ) : null}
           </div>
+
           <Button
             variant="ghost"
             size="icon"
@@ -91,6 +151,7 @@ export function CartItem({ item, stockInfo }: CartItemProps) {
                 {formatPrice(item.price)}
               </p>
             </div>
+
             <StockBadge productId={item.productId} stock={currentStock} />
           </div>
 
@@ -113,6 +174,7 @@ export function CartItem({ item, stockInfo }: CartItemProps) {
                   stock={currentStock}
                   className="h-10"
                   redirectToCartOnAdd={false}
+                  accessories={item.accessories ?? []}
                 />
               </div>
             )}

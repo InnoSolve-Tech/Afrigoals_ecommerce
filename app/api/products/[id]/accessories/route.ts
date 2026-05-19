@@ -1,0 +1,22 @@
+import { NextResponse } from "next/server";
+import { authedFetch } from "@/lib/api/proxy";
+
+export async function GET(
+  _req: Request,
+  ctx: { params: Promise<{ id: string }> },
+) {
+  const { id } = await ctx.params;
+
+  const res = await authedFetch(
+    `/api/v1/products/${encodeURIComponent(id)}/accessories`,
+  );
+
+  const body = await res.text();
+
+  return new NextResponse(body, {
+    status: res.status,
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+}

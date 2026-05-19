@@ -13,11 +13,27 @@ type PaymentMethod = "pesapal" | "cod";
 interface CheckoutButtonProps {
   disabled?: boolean;
   paymentMethod: PaymentMethod;
+
   deliveryAddress: string;
   deliveryLat: number | null;
   deliveryLng: number | null;
   deliveryFee: number | null;
   deliveryDistanceKm: number | null;
+
+  deliveryContactName: string;
+  deliveryContactPhone: string;
+  deliveryAltPhone?: string;
+  deliveryNote?: string;
+}
+
+function cleanPhone(value: string | undefined): string {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, "");
+}
+
+function isValidPhone(value: string): boolean {
+  return /^\+?[0-9]{7,15}$/.test(value);
 }
 
 export function CheckoutButton({
@@ -28,22 +44,79 @@ export function CheckoutButton({
   deliveryLng,
   deliveryFee,
   deliveryDistanceKm,
+  deliveryContactName,
+  deliveryContactPhone,
+  deliveryAltPhone,
+  deliveryNote,
 }: CheckoutButtonProps) {
   const items = useCartItems();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  const receiverName = deliveryContactName.trim();
+  const receiverPhone = cleanPhone(deliveryContactPhone);
+  const receiverAltPhone = cleanPhone(deliveryAltPhone);
+  const receiverNote = deliveryNote?.trim() || "";
+
+  const hasValidDelivery =
+    !!deliveryAddress.trim() &&
+    deliveryLat !== null &&
+    deliveryLng !== null &&
+    deliveryFee !== null &&
+    deliveryDistanceKm !== null;
+
+  const hasValidReceiver =
+    !!receiverName &&
+    !!receiverPhone &&
+    isValidPhone(receiverPhone) &&
+    (!receiverAltPhone || isValidPhone(receiverAltPhone));
+
   const canCheckout =
     !disabled &&
     !isPending &&
     items.length > 0 &&
-    !!deliveryAddress &&
-    deliveryLat != null &&
-    deliveryLng != null &&
-    deliveryFee != null &&
-    deliveryDistanceKm != null;
+    hasValidDelivery &&
+    hasValidReceiver;
 
-  const handleCheckout = () => {
+  function validateBeforeCheckout(): string | null {
+    if (!items.length) return "Your cart is empty.";
+
+    if (!deliveryAddress.trim()) return "Select a delivery address first.";
+
+    if (deliveryLat === null || deliveryLng === null) {
+      return "Delivery coordinates are missing.";
+    }
+
+    if (deliveryFee === null || deliveryDistanceKm === null) {
+      return "Delivery fee has not been calculated.";
+    }
+
+    if (!receiverName) return "Receiver name is required.";
+
+    if (!receiverPhone) return "Receiver phone is required.";
+
+    if (!isValidPhone(receiverPhone)) {
+      return "Receiver phone is invalid.";
+    }
+
+    if (receiverAltPhone && !isValidPhone(receiverAltPhone)) {
+      return "Alternative phone is invalid.";
+    }
+
+    return null;
+  }
+
+  function handleCheckout() {
+    const validationError = validateBeforeCheckout();
+
+    if (validationError) {
+      setError(validationError);
+      toast.error("Checkout blocked", {
+        description: validationError,
+      });
+      return;
+    }
+
     if (!canCheckout) return;
 
     setError(null);
@@ -52,11 +125,16 @@ export function CheckoutButton({
       try {
         if (paymentMethod === "cod") {
           const result = await createCashOnDeliveryOrder(items, {
-            address: deliveryAddress,
-            lat: deliveryLat!,
-            lng: deliveryLng!,
-            fee: deliveryFee!,
-            distanceKm: deliveryDistanceKm!,
+            address: deliveryAddress.trim(),
+            lat: deliveryLat,
+            lng: deliveryLng,
+            fee: deliveryFee,
+            distanceKm: deliveryDistanceKm,
+
+            contactName: receiverName,
+            contactPhone: receiverPhone,
+            altPhone: receiverAltPhone,
+            note: receiverNote,
           });
 
           if (!result.success) {
@@ -87,11 +165,14 @@ export function CheckoutButton({
         }
 
         const result = await createCheckoutSession(items, {
-          address: deliveryAddress,
-          lat: deliveryLat!,
-          lng: deliveryLng!,
-          fee: deliveryFee!,
-          distanceKm: deliveryDistanceKm!,
+          address: deliveryAddress.trim(),
+          lat: deliveryLat,
+          lng: deliveryLng,
+
+          contactName: receiverName,
+          contactPhone: receiverPhone,
+          altPhone: receiverAltPhone,
+          note: receiverNote,
         });
 
         if (!result.success) {
@@ -140,7 +221,7 @@ export function CheckoutButton({
         );
       }
     });
-  };
+  }
 
   const buttonLabel = isPending
     ? paymentMethod === "cod"
@@ -175,7 +256,7 @@ export function CheckoutButton({
         )}
       </Button>
 
-      {error && (
+      {error ? (
         <div className="text-center text-sm text-red-600 dark:text-red-400">
           <p className="font-medium">
             {paymentMethod === "cod"
@@ -184,7 +265,7 @@ export function CheckoutButton({
           </p>
           <p>{error}</p>
         </div>
-      )}
+      ) : null}
 
       <p className="text-center text-xs text-muted-foreground">
         {paymentMethod === "cod"
