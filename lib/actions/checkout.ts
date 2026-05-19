@@ -96,6 +96,36 @@ function cleanAccessories(accessories: CartItemAccessory[] | undefined) {
     .filter((accessory) => accessory.accessoryId);
 }
 
+function validateCartItems(items: CartItem[]): string | null {
+  if (!Array.isArray(items) || items.length === 0) {
+    return "Your cart is empty.";
+  }
+
+  for (const item of items) {
+    if (!item.productId?.trim()) {
+      return "Invalid cart item.";
+    }
+
+    if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
+      return "Invalid cart quantity.";
+    }
+
+    const accessories = cleanAccessories(item.accessories);
+
+    for (const accessory of accessories) {
+      if (!accessory.accessoryId) {
+        return "Invalid accessory selected.";
+      }
+
+      if (!Number.isInteger(accessory.quantity) || accessory.quantity <= 0) {
+        return "Invalid accessory quantity.";
+      }
+    }
+  }
+
+  return null;
+}
+
 export async function createCheckoutSession(
   items: CartItem[],
   delivery: DeliveryInput,
@@ -111,27 +141,12 @@ export async function createCheckoutSession(
       };
     }
 
-    if (!Array.isArray(items) || items.length === 0) {
+    const cartError = validateCartItems(items);
+    if (cartError) {
       return {
         success: false,
-        error: "Your cart is empty.",
+        error: cartError,
       };
-    }
-
-    for (const item of items) {
-      if (!item.productId?.trim()) {
-        return {
-          success: false,
-          error: "Invalid cart item.",
-        };
-      }
-
-      if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
-        return {
-          success: false,
-          error: "Invalid cart quantity.",
-        };
-      }
     }
 
     const address = delivery.address?.trim() || "";
@@ -205,6 +220,11 @@ export async function createCheckoutSession(
         note,
       },
     };
+
+    // TEMP DEBUG:
+    // Keep this until Pesapal accessories appear correctly in created orders.
+    // Then remove it.
+    console.log("PESAPAL CHECKOUT PAYLOAD", JSON.stringify(payload, null, 2));
 
     const res = await fetch(`${apiBaseUrl}/orders/checkout/pesapal`, {
       method: "POST",

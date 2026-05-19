@@ -3,7 +3,7 @@
 import { AlertTriangle, ArrowLeft, Loader2, ShoppingBag } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { CheckoutButton } from "@/components/app/CheckoutButton";
 import { DeliveryMapPicker } from "@/components/checkout/DeliveryMapPicker";
@@ -16,15 +16,135 @@ import {
   useTotalItems,
   useTotalPrice,
 } from "@/lib/store/cart-store-provider";
+import type { CartItem as CartItemType } from "@/lib/store/cart-store";
 import { formatPrice } from "@/lib/utils";
 
 type PaymentMethod = "pesapal" | "cod";
 
+type CartAccessoryLike = {
+  accessoryId: string;
+  quantity?: number;
+  text?: string;
+  number?: string;
+  notes?: string;
+  name?: string;
+  code?: string;
+  unitPrice?: number;
+  price?: number;
+};
+
+type ProductAccessoryLinkResponse = {
+  id: string;
+  productId: string;
+  accessoryId: string;
+  isRequired?: boolean;
+  sortOrder?: number;
+  accessory?: {
+    id: string;
+    name: string;
+    code: string;
+    price: number;
+    isActive?: boolean;
+  };
+};
+
+function getAccessoryUnitPrice(accessory: CartAccessoryLike) {
+  return Number(accessory.unitPrice ?? accessory.price ?? 0);
+}
+
+function getAccessoryQuantity(accessory: CartAccessoryLike) {
+  const quantity = Number(accessory.quantity || 1);
+  return Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+}
+
+function getItemAccessoriesTotal(item: {
+  quantity: number;
+  accessories?: CartAccessoryLike[];
+}) {
+  const perProductAccessoriesTotal =
+    item.accessories?.reduce((sum, accessory) => {
+      const accessoryQty = getAccessoryQuantity(accessory);
+      return sum + getAccessoryUnitPrice(accessory) * accessoryQty;
+    }, 0) ?? 0;
+
+  return perProductAccessoriesTotal * Number(item.quantity || 1);
+}
+
+function getCartAccessoriesTotal(
+  items: Array<{
+    quantity: number;
+    accessories?: CartAccessoryLike[];
+  }>,
+) {
+  return items.reduce((sum, item) => sum + getItemAccessoriesTotal(item), 0);
+}
+
+function enrichCartItemsWithAccessoryPrices(
+  items: CartItemType[],
+  accessoryLookup: Record<string, Record<string, ProductAccessoryLinkResponse>>,
+): CartItemType[] {
+  return items.map((item) => {
+    if (!Array.isArray(item.accessories) || item.accessories.length === 0) {
+      return item;
+    }
+
+    const productAccessories = accessoryLookup[item.productId] || {};
+
+    return {
+      ...item,
+      accessories: item.accessories.map((accessory) => {
+        const link = productAccessories[accessory.accessoryId];
+        const linkedAccessory = link?.accessory;
+
+        return {
+          ...accessory,
+          name: accessory.name || linkedAccessory?.name || "",
+          code: accessory.code || linkedAccessory?.code || "",
+          unitPrice:
+            typeof accessory.unitPrice === "number"
+              ? accessory.unitPrice
+              : Number(linkedAccessory?.price || 0),
+        };
+      }),
+    };
+  });
+}
+
+async function fetchProductAccessories(productId: string) {
+  const res = await fetch(
+    `/api/products/${encodeURIComponent(productId)}/accessories`,
+    {
+      cache: "no-store",
+    },
+  );
+
+  if (!res.ok) {
+    return [];
+  }
+
+  const data = await res.json().catch(() => []);
+  return Array.isArray(data) ? (data as ProductAccessoryLinkResponse[]) : [];
+}
+
 export function CheckoutClient() {
-  const items = useCartItems();
-  const totalPrice = useTotalPrice();
+  const rawItems = useCartItems();
+  const productSubtotal = useTotalPrice();
   const totalItems = useTotalItems();
-  const { stockMap, isLoading, hasStockIssues } = useCartStock(items);
+
+  const [accessoryLookup, setAccessoryLookup] = useState<
+    Record<string, Record<string, ProductAccessoryLinkResponse>>
+  >({});
+  const [isLoadingAccessories, setIsLoadingAccessories] = useState(false);
+
+  const items = useMemo(
+    () => enrichCartItemsWithAccessoryPrices(rawItems, accessoryLookup),
+    [rawItems, accessoryLookup],
+  );
+
+  const accessoriesTotal = getCartAccessoriesTotal(items);
+  const subtotal = productSubtotal + accessoriesTotal;
+
+  const { stockMap, isLoading, hasStockIssues } = useCartStock(rawItems);
 
   const [isCalculating, startTransition] = useTransition();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pesapal");
@@ -43,7 +163,7 @@ export function CheckoutClient() {
   const [deliveryAltPhone, setDeliveryAltPhone] = useState("");
   const [deliveryNote, setDeliveryNote] = useState("");
 
-  const total = totalPrice + (deliveryFee ?? 0);
+  const total = subtotal + (deliveryFee ?? 0);
 
   const deliveryQuoteReady =
     deliveryAddress.trim() !== "" &&
@@ -54,6 +174,77 @@ export function CheckoutClient() {
 
   const deliveryContactReady =
     deliveryContactName.trim() !== "" && deliveryContactPhone.trim() !== "";
+
+  useEffect(() => {
+    const productIdsNeedingAccessories = Array.from(
+      new Set(
+        rawItems
+          .filter((item) => item.accessories && item.accessories.length > 0)
+          .map((item) => item.productId),
+      ),
+    ).filter((productId) => !accessoryLookup[productId]);
+
+    if (productIdsNeedingAccessories.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadAccessories() {
+      setIsLoadingAccessories(true);
+
+      try {
+        const results = await Promise.all(
+          productIdsNeedingAccessories.map(async (productId) => {
+            const links = await fetchProductAccessories(productId);
+
+            const byAccessoryId = links.reduce<
+              Record<string, ProductAccessoryLinkResponse>
+            >((acc, link) => {
+              if (link.accessoryId) {
+                acc[link.accessoryId] = link;
+              }
+
+              if (link.accessory?.id) {
+                acc[link.accessory.id] = link;
+              }
+
+              return acc;
+            }, {});
+
+            return {
+              productId,
+              byAccessoryId,
+            };
+          }),
+        );
+
+        if (cancelled) {
+          return;
+        }
+
+        setAccessoryLookup((current) => {
+          const next = { ...current };
+
+          for (const result of results) {
+            next[result.productId] = result.byAccessoryId;
+          }
+
+          return next;
+        });
+      } finally {
+        if (!cancelled) {
+          setIsLoadingAccessories(false);
+        }
+      }
+    }
+
+    loadAccessories();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [rawItems, accessoryLookup]);
 
   function resetDeliveryQuoteAndContact() {
     setDeliveryFee(null);
@@ -116,6 +307,7 @@ export function CheckoutClient() {
   const isCheckoutDisabled =
     hasStockIssues ||
     isLoading ||
+    isLoadingAccessories ||
     isCalculating ||
     !deliveryQuoteReady ||
     !deliveryContactReady;
@@ -394,11 +586,13 @@ export function CheckoutClient() {
                 </div>
               ) : null}
 
-              {isLoading ? (
+              {(isLoading || isLoadingAccessories) ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
                   <span className="ml-2 text-sm text-zinc-500">
-                    Verifying stock...
+                    {isLoadingAccessories
+                      ? "Loading accessory pricing..."
+                      : "Verifying stock..."}
                   </span>
                 </div>
               ) : null}
@@ -408,6 +602,10 @@ export function CheckoutClient() {
                   const stockInfo = stockMap.get(item.productId);
                   const hasIssue =
                     stockInfo?.isOutOfStock || stockInfo?.exceedsStock;
+
+                  const itemBaseTotal = item.price * item.quantity;
+                  const itemAccessoriesTotal = getItemAccessoriesTotal(item);
+                  const itemLineTotal = itemBaseTotal + itemAccessoriesTotal;
 
                   return (
                     <div
@@ -442,6 +640,50 @@ export function CheckoutClient() {
                             Qty: {item.quantity}
                           </p>
 
+                          {item.accessories?.length ? (
+                            <div className="mt-2 rounded-md border border-zinc-200 bg-zinc-50 p-2 text-xs dark:border-zinc-800 dark:bg-zinc-900">
+                              <p className="font-medium text-zinc-900 dark:text-zinc-100">
+                                Accessories / customization
+                              </p>
+
+                              <div className="mt-1 space-y-1">
+                                {item.accessories.map((accessory) => {
+                                  const unitPrice =
+                                    getAccessoryUnitPrice(accessory);
+                                  const accessoryQty =
+                                    getAccessoryQuantity(accessory);
+                                  const line =
+                                    unitPrice * accessoryQty * item.quantity;
+
+                                  return (
+                                    <div
+                                      key={`${accessory.accessoryId}-${accessory.text || ""}-${accessory.number || ""}`}
+                                      className="flex justify-between gap-3 text-zinc-600 dark:text-zinc-400"
+                                    >
+                                      <span>
+                                        {accessory.name ||
+                                          accessory.code ||
+                                          "Accessory"}
+                                        {accessory.text
+                                          ? ` • ${accessory.text}`
+                                          : ""}
+                                        {accessory.number
+                                          ? ` #${accessory.number}`
+                                          : ""}
+                                      </span>
+
+                                      <span>
+                                        {unitPrice > 0
+                                          ? formatPrice(line)
+                                          : "Loading price"}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ) : null}
+
                           {stockInfo?.isOutOfStock ? (
                             <p className="mt-1 text-sm font-medium text-red-600">
                               Out of stock
@@ -459,10 +701,14 @@ export function CheckoutClient() {
 
                       <div className="text-right">
                         <p className="font-medium text-zinc-900 dark:text-zinc-100">
-                          {formatPrice(item.price * item.quantity)}
+                          {formatPrice(itemLineTotal)}
                         </p>
 
-                        {item.quantity > 1 ? (
+                        {itemAccessoriesTotal > 0 ? (
+                          <p className="text-sm text-zinc-500">
+                            Includes {formatPrice(itemAccessoriesTotal)} extras
+                          </p>
+                        ) : item.quantity > 1 ? (
                           <p className="text-sm text-zinc-500">
                             {formatPrice(item.price)} each
                           </p>
@@ -484,10 +730,40 @@ export function CheckoutClient() {
               <div className="mt-6 space-y-4">
                 <div className="flex justify-between text-sm">
                   <span className="text-zinc-500 dark:text-zinc-400">
+                    Products
+                  </span>
+                  <span className="text-zinc-900 dark:text-zinc-100">
+                    {formatPrice(productSubtotal)}
+                  </span>
+                </div>
+
+                {accessoriesTotal > 0 ? (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-zinc-500 dark:text-zinc-400">
+                      Accessories / customization
+                    </span>
+                    <span className="text-zinc-900 dark:text-zinc-100">
+                      {formatPrice(accessoriesTotal)}
+                    </span>
+                  </div>
+                ) : isLoadingAccessories ? (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-zinc-500 dark:text-zinc-400">
+                      Accessories / customization
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-zinc-900 dark:text-zinc-100">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Loading
+                    </span>
+                  </div>
+                ) : null}
+
+                <div className="flex justify-between text-sm">
+                  <span className="text-zinc-500 dark:text-zinc-400">
                     Subtotal
                   </span>
                   <span className="text-zinc-900 dark:text-zinc-100">
-                    {formatPrice(totalPrice)}
+                    {formatPrice(subtotal)}
                   </span>
                 </div>
 
@@ -541,18 +817,18 @@ export function CheckoutClient() {
 
               <div className="mt-6">
                 <CheckoutButton
-  disabled={isCheckoutDisabled}
-  paymentMethod={paymentMethod}
-  deliveryAddress={deliveryAddress}
-  deliveryLat={deliveryLat}
-  deliveryLng={deliveryLng}
-  deliveryFee={deliveryFee}
-  deliveryDistanceKm={deliveryDistanceKm}
-  deliveryContactName={deliveryContactName}
-  deliveryContactPhone={deliveryContactPhone}
-  deliveryAltPhone={deliveryAltPhone}
-  deliveryNote={deliveryNote}
-/>
+                  disabled={isCheckoutDisabled}
+                  paymentMethod={paymentMethod}
+                  deliveryAddress={deliveryAddress}
+                  deliveryLat={deliveryLat}
+                  deliveryLng={deliveryLng}
+                  deliveryFee={deliveryFee}
+                  deliveryDistanceKm={deliveryDistanceKm}
+                  deliveryContactName={deliveryContactName}
+                  deliveryContactPhone={deliveryContactPhone}
+                  deliveryAltPhone={deliveryAltPhone}
+                  deliveryNote={deliveryNote}
+                />
               </div>
 
               <p className="mt-4 text-center text-xs text-zinc-500 dark:text-zinc-400">
