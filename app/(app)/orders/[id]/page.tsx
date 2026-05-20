@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   CheckCircle2,
+  Circle,
   Clock,
   CreditCard,
   MapPin,
@@ -46,6 +47,44 @@ type FlexibleOrderItem = ApiOrder["items"][number] & {
   line_subtotal?: number;
 };
 
+type FlexibleApiOrder = ApiOrder & {
+  paymentStatus?: string;
+  payment_status?: string;
+};
+
+const ORDER_PROGRESS_STEPS = [
+  {
+    key: "pending",
+    label: "Pending",
+    description: "Order received",
+  },
+  {
+    key: "processing",
+    label: "Processing",
+    description: "Order being prepared",
+  },
+  {
+    key: "packed",
+    label: "Packed",
+    description: "Items packed",
+  },
+  {
+    key: "shipped",
+    label: "Shipped",
+    description: "Order dispatched",
+  },
+  {
+    key: "out_for_delivery",
+    label: "Out for delivery",
+    description: "On the way",
+  },
+  {
+    key: "delivered",
+    label: "Delivered",
+    description: "Order completed",
+  },
+] as const;
+
 function parseOrderItemAccessories(raw?: string | null): OrderItemAccessory[] {
   if (!raw) return [];
 
@@ -84,6 +123,336 @@ function getAccessoriesFee(item: FlexibleOrderItem) {
 
 function getLineSubtotal(item: FlexibleOrderItem) {
   return Number(item.lineSubtotal ?? item.line_subtotal ?? 0);
+}
+
+function normalizeOrderStatus(status: string | undefined | null) {
+  return String(status || "")
+    .trim()
+    .toLowerCase()
+    .replaceAll(" ", "_")
+    .replaceAll("-", "_");
+}
+
+function normalizePaymentStatus(status: string | undefined | null) {
+  return String(status || "")
+    .trim()
+    .toLowerCase()
+    .replaceAll(" ", "_")
+    .replaceAll("-", "_");
+}
+
+function getOrderPaymentStatus(order: FlexibleApiOrder) {
+  const normalizedOrderStatus = normalizeOrderStatus(order.status);
+
+  if (normalizedOrderStatus === "paid") {
+    return "paid";
+  }
+
+  if (normalizedOrderStatus === "payment_failed") {
+    return "payment_failed";
+  }
+
+  const rawPaymentStatus = order.paymentStatus || order.payment_status;
+  const normalizedPaymentStatus = normalizePaymentStatus(rawPaymentStatus);
+
+  if (normalizedPaymentStatus) {
+    return normalizedPaymentStatus;
+  }
+
+  const paymentMethod = normalizePaymentStatus(order.paymentMethod);
+
+  if (paymentMethod === "pesapal" || paymentMethod === "online") {
+    return "paid";
+  }
+
+  if (paymentMethod === "cod" || paymentMethod === "cash_on_delivery") {
+    return "unpaid";
+  }
+
+  return "unpaid";
+}
+
+function isCancelledStatus(status: string | undefined | null) {
+  const normalizedStatus = normalizeOrderStatus(status);
+
+  return normalizedStatus === "cancelled" || normalizedStatus === "canceled";
+}
+
+function isPaymentFailedStatus(status: string | undefined | null) {
+  return normalizeOrderStatus(status) === "payment_failed";
+}
+
+function getOrderProgressIndex(status: string | undefined | null) {
+  const normalizedStatus = normalizeOrderStatus(status);
+
+  if (
+    isCancelledStatus(normalizedStatus) ||
+    isPaymentFailedStatus(normalizedStatus)
+  ) {
+    return -1;
+  }
+
+  if (normalizedStatus === "paid") {
+    return ORDER_PROGRESS_STEPS.findIndex((step) => step.key === "delivered");
+  }
+
+  if (normalizedStatus === "unpaid") {
+    return ORDER_PROGRESS_STEPS.findIndex((step) => step.key === "pending");
+  }
+
+  const index = ORDER_PROGRESS_STEPS.findIndex(
+    (step) => step.key === normalizedStatus,
+  );
+
+  return index >= 0 ? index : 0;
+}
+
+function getVisibleOrderProgressStage(status: string | undefined | null) {
+  const normalizedStatus = normalizeOrderStatus(status);
+
+  if (normalizedStatus === "paid") {
+    return "Delivered";
+  }
+
+  if (normalizedStatus === "unpaid") {
+    return "Pending";
+  }
+
+  if (normalizedStatus === "payment_failed") {
+    return "Payment failed";
+  }
+
+  return formatOrderStatus(normalizedStatus || "pending");
+}
+
+function PaymentStatusBadge({
+  paymentStatus,
+  paymentMethod,
+}: {
+  paymentStatus?: string | null;
+  paymentMethod?: string | null;
+}) {
+  const normalizedPaymentStatus = normalizePaymentStatus(paymentStatus);
+  const normalizedPaymentMethod = normalizePaymentStatus(paymentMethod);
+
+  const isPaid = normalizedPaymentStatus === "paid";
+  const isPaymentFailed = normalizedPaymentStatus === "payment_failed";
+
+  const label = isPaymentFailed ? "Payment failed" : isPaid ? "Paid" : "Unpaid";
+
+  const description = isPaymentFailed
+    ? "Payment was not completed"
+    : isPaid
+      ? normalizedPaymentMethod === "pesapal"
+        ? "Paid online through Pesapal"
+        : "Payment received"
+      : normalizedPaymentMethod === "cod" ||
+          normalizedPaymentMethod === "cash_on_delivery"
+        ? "Cash to be collected on delivery"
+        : "Payment not yet received";
+
+  return (
+    <div
+      className={[
+        "rounded-lg border p-4",
+        isPaymentFailed
+          ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30"
+          : isPaid
+            ? "border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30"
+            : "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30",
+      ].join(" ")}
+    >
+      <div className="flex items-start gap-3">
+        {isPaymentFailed ? (
+          <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600 dark:text-red-400" />
+        ) : isPaid ? (
+          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-green-600 dark:text-green-400" />
+        ) : (
+          <Clock className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+        )}
+
+        <div>
+          <p
+            className={[
+              "font-semibold",
+              isPaymentFailed
+                ? "text-red-800 dark:text-red-300"
+                : isPaid
+                  ? "text-green-800 dark:text-green-300"
+                  : "text-amber-800 dark:text-amber-300",
+            ].join(" ")}
+          >
+            Payment Status: {label}
+          </p>
+
+          <p
+            className={[
+              "mt-0.5 text-sm",
+              isPaymentFailed
+                ? "text-red-700 dark:text-red-400"
+                : isPaid
+                  ? "text-green-700 dark:text-green-400"
+                  : "text-amber-700 dark:text-amber-400",
+            ].join(" ")}
+          >
+            {description}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OrderProgressTracker({ status }: { status?: string | null }) {
+  const normalizedStatus = normalizeOrderStatus(status);
+
+  const isCancelled = isCancelledStatus(normalizedStatus);
+  const isPaymentFailed = isPaymentFailedStatus(normalizedStatus);
+
+  const currentIndex = getOrderProgressIndex(status);
+
+  const progressPercent =
+    isCancelled || isPaymentFailed
+      ? 100
+      : (currentIndex / (ORDER_PROGRESS_STEPS.length - 1)) * 100;
+
+  return (
+    <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="mb-5 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+            Order Progress
+          </h2>
+
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            Current stage: {getVisibleOrderProgressStage(status)}
+          </p>
+        </div>
+
+        {isCancelled ? (
+          <span className="inline-flex w-fit rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700 dark:bg-red-950/50 dark:text-red-300">
+            Cancelled
+          </span>
+        ) : null}
+
+        {isPaymentFailed ? (
+          <span className="inline-flex w-fit rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700 dark:bg-red-950/50 dark:text-red-300">
+            Payment failed
+          </span>
+        ) : null}
+      </div>
+
+      {isCancelled ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+          This order was cancelled. No further delivery progress will continue.
+        </div>
+      ) : isPaymentFailed ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+          Payment failed. This order cannot continue until payment is resolved.
+        </div>
+      ) : (
+        <>
+          <div className="relative hidden sm:block">
+            <div className="absolute left-0 right-0 top-5 h-1 rounded-full bg-zinc-200 dark:bg-zinc-800" />
+
+            <div
+              className="absolute left-0 top-5 h-1 rounded-full bg-blue-600 transition-all duration-300 dark:bg-blue-500"
+              style={{ width: `${progressPercent}%` }}
+            />
+
+            <div className="relative grid grid-cols-6 gap-2">
+              {ORDER_PROGRESS_STEPS.map((step, index) => {
+                const completed = index <= currentIndex;
+                const active = index === currentIndex;
+
+                return (
+                  <div
+                    key={step.key}
+                    className="flex flex-col items-center text-center"
+                  >
+                    <div
+                      className={[
+                        "z-10 flex h-10 w-10 items-center justify-center rounded-full border-2 bg-white transition dark:bg-zinc-950",
+                        completed
+                          ? "border-blue-600 text-blue-600 dark:border-blue-500 dark:text-blue-400"
+                          : "border-zinc-300 text-zinc-400 dark:border-zinc-700 dark:text-zinc-500",
+                        active ? "ring-4 ring-blue-100 dark:ring-blue-950" : "",
+                      ].join(" ")}
+                    >
+                      {completed ? (
+                        <CheckCircle2 className="h-5 w-5" />
+                      ) : (
+                        <Circle className="h-4 w-4" />
+                      )}
+                    </div>
+
+                    <p
+                      className={[
+                        "mt-3 text-xs font-semibold",
+                        completed
+                          ? "text-zinc-900 dark:text-zinc-100"
+                          : "text-zinc-400 dark:text-zinc-500",
+                      ].join(" ")}
+                    >
+                      {step.label}
+                    </p>
+
+                    <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                      {step.description}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-3 sm:hidden">
+            {ORDER_PROGRESS_STEPS.map((step, index) => {
+              const completed = index <= currentIndex;
+              const active = index === currentIndex;
+
+              return (
+                <div key={step.key} className="flex gap-3">
+                  <div
+                    className={[
+                      "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border",
+                      completed
+                        ? "border-blue-600 text-blue-600 dark:border-blue-500 dark:text-blue-400"
+                        : "border-zinc-300 text-zinc-400 dark:border-zinc-700 dark:text-zinc-500",
+                      active ? "bg-blue-50 dark:bg-blue-950/40" : "",
+                    ].join(" ")}
+                  >
+                    {completed ? (
+                      <CheckCircle2 className="h-4 w-4" />
+                    ) : (
+                      <Circle className="h-3 w-3" />
+                    )}
+                  </div>
+
+                  <div>
+                    <p
+                      className={[
+                        "text-sm font-semibold",
+                        completed
+                          ? "text-zinc-900 dark:text-zinc-100"
+                          : "text-zinc-400 dark:text-zinc-500",
+                      ].join(" ")}
+                    >
+                      {step.label}
+                    </p>
+
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      {step.description}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 function PaymentBanner({ payment }: { payment?: string }) {
@@ -176,9 +545,16 @@ function PaymentBanner({ payment }: { payment?: string }) {
 }
 
 function canEditDeliveryContact(status: string | undefined) {
-  return !["shipped", "out_for_delivery", "delivered", "cancelled"].includes(
-    String(status || "").toLowerCase(),
-  );
+  return ![
+    "packed",
+    "shipped",
+    "out_for_delivery",
+    "delivered",
+    "paid",
+    "cancelled",
+    "canceled",
+    "payment_failed",
+  ].includes(normalizeOrderStatus(status));
 }
 
 export default async function OrderDetailPage({
@@ -198,8 +574,10 @@ export default async function OrderDetailPage({
     notFound();
   }
 
-  const order = (await res.json()) as ApiOrder;
+  const order = (await res.json()) as FlexibleApiOrder;
   const items = (order.items || []) as FlexibleOrderItem[];
+
+  const paymentStatus = getOrderPaymentStatus(order);
 
   const totalAccessoriesFee = items.reduce(
     (sum, item) => sum + getAccessoriesFee(item) * Number(item.quantity || 1),
@@ -236,6 +614,13 @@ export default async function OrderDetailPage({
       <PaymentBanner payment={payment} />
 
       <div className="space-y-6">
+        <PaymentStatusBadge
+          paymentStatus={paymentStatus}
+          paymentMethod={order.paymentMethod}
+        />
+
+        <OrderProgressTracker status={order.status} />
+
         <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
           <h2 className="mb-6 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
             Items
@@ -498,7 +883,20 @@ export default async function OrderDetailPage({
             <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
               <div className="flex items-center justify-between gap-4 sm:block">
                 <span className="text-xs font-light tracking-wide text-zinc-500 dark:text-zinc-400">
-                  Status
+                  Payment Status
+                </span>
+                <span className="font-medium text-zinc-900 dark:text-zinc-100 sm:block">
+                  {paymentStatus === "paid"
+                    ? "Paid"
+                    : paymentStatus === "payment_failed"
+                      ? "Payment failed"
+                      : "Unpaid"}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between gap-4 sm:block">
+                <span className="text-xs font-light tracking-wide text-zinc-500 dark:text-zinc-400">
+                  Order Status
                 </span>
                 <span className="font-medium text-zinc-900 dark:text-zinc-100 sm:block">
                   {formatOrderStatus(order.status)}
