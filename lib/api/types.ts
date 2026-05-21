@@ -9,6 +9,8 @@ export type ApiProduct = {
   stock: number;
   createdAt?: string;
   updatedAt?: string;
+  category: string;
+  isFeatured: boolean;
 };
 
 export type ApiOrderItemAccessory = {
