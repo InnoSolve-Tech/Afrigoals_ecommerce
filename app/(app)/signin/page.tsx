@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { AUTH_COOKIE_NAME } from "@/lib/auth/constants";
 
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1";
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080//api/v1";
 
 type AuthResponse = {
   token?: string;
@@ -148,7 +148,7 @@ function SignInInner() {
       completeAuth(data);
     } catch (err) {
       console.error(err);
-      setError("Google sign in failed. Check the backend /api/v1/auth/google route.");
+      setError("Google sign in failed. Check the backend /auth/google route.");
     } finally {
       setGoogleLoading(false);
     }

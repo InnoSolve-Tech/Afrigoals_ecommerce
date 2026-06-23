@@ -7,7 +7,7 @@ export async function PATCH(
 ) {
   const { id } = await ctx.params;
   const res = await authedFetch(
-    `/api/v1/admin/orders/${encodeURIComponent(id)}/status`,
+    `/admin/orders/${encodeURIComponent(id)}/status`,
     {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },

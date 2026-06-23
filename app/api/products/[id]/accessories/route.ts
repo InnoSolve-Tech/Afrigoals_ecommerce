@@ -8,7 +8,7 @@ export async function GET(
   const { id } = await ctx.params;
 
   const res = await authedFetch(
-    `/api/v1/products/${encodeURIComponent(id)}/accessories`,
+    `/products/${encodeURIComponent(id)}/accessories`,
   );
 
   const body = await res.text();

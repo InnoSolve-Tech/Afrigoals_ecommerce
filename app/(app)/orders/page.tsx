@@ -101,7 +101,7 @@ function orderHasAccessories(order: FlexibleApiOrder) {
 }
 
 export default async function OrdersPage() {
-  const res = await authedFetch("/api/v1/orders/my");
+  const res = await authedFetch("/orders/my");
 
   if (res.status === 401) {
     redirect("/signin?next=/orders");

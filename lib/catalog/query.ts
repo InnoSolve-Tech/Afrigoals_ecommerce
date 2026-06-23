@@ -26,7 +26,7 @@ export async function getCatalogProductBySlug(
 ): Promise<CatalogProduct | null> {
   try {
     const product = await apiGet<ApiProduct>(
-      `/api/v1/products/slug/${encodeURIComponent(slug)}`,
+      `/products/slug/${encodeURIComponent(slug)}`,
     );
 
     return apiProductToCatalogProduct(product);
@@ -54,7 +54,7 @@ export async function getCatalogProductsByIds(
   const qs = new URLSearchParams();
   qs.set("ids", uniqueIds.join(","));
 
-  const products = await apiGet<ApiProduct[]>(`/api/v1/products?${qs}`);
+  const products = await apiGet<ApiProduct[]>(`/products?${qs}`);
 
   return products.map(apiProductToCatalogProduct);
 }
@@ -89,7 +89,7 @@ export async function queryCatalogProducts(
 
   try {
     apiProducts = await apiGet<ApiProduct[]>(
-      `/api/v1/products${qs.toString() ? `?${qs.toString()}` : ""}`,
+      `/products${qs.toString() ? `?${qs.toString()}` : ""}`,
     );
   } catch {
     apiProducts = [];

@@ -156,7 +156,7 @@ function SignUpInner() {
       completeAuth(data);
     } catch (err) {
       console.error(err);
-      setError("Google signup failed. Check the backend /api/v1/auth/google route.");
+      setError("Google signup failed. Check the backend /auth/google route.");
     } finally {
       setGoogleLoading(false);
     }

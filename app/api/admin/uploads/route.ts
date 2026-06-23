@@ -3,7 +3,7 @@ import { authedFetch } from "@/lib/api/proxy";
 
 export async function POST(req: Request) {
   const formData = await req.formData();
-  const res = await authedFetch("/api/v1/uploads", {
+  const res = await authedFetch("/uploads", {
     method: "POST",
     body: formData as any,
   });

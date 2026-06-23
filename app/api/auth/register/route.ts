@@ -10,7 +10,7 @@ const apiBaseUrl = (
 export async function POST(req: Request) {
   const body = await req.json();
 
-  const res = await fetch(`${apiBaseUrl}/api/v1/auth/register`, {
+  const res = await fetch(`${apiBaseUrl}/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify(body),

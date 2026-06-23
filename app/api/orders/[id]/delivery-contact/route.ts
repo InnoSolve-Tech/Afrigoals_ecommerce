@@ -8,7 +8,7 @@ export async function PATCH(
   const { id } = await ctx.params;
 
   const res = await authedFetch(
-    `/api/v1/orders/${encodeURIComponent(id)}/delivery-contact`,
+    `/orders/${encodeURIComponent(id)}/delivery-contact`,
     {
       method: "PATCH",
       headers: {

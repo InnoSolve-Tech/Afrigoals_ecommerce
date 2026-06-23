@@ -6,7 +6,7 @@ export async function PUT(
   ctx: { params: Promise<{ id: string }> },
 ) {
   const { id } = await ctx.params;
-  const res = await authedFetch(`/api/v1/products/${encodeURIComponent(id)}`, {
+  const res = await authedFetch(`/products/${encodeURIComponent(id)}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: await req.text(),
@@ -23,7 +23,7 @@ export async function DELETE(
   ctx: { params: Promise<{ id: string }> },
 ) {
   const { id } = await ctx.params;
-  const res = await authedFetch(`/api/v1/products/${encodeURIComponent(id)}`, {
+  const res = await authedFetch(`/products/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
   if (res.status === 204) {
