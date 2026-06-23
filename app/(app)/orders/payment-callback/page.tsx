@@ -53,7 +53,7 @@ export default async function PaymentCallbackPage({
   });
 
   const res = await authedFetch(
-    `/api/v1/orders/payment-callback?${query.toString()}`,
+    `/orders/payment-callback?${query.toString()}`,
   );
 
   if (!res.ok) {

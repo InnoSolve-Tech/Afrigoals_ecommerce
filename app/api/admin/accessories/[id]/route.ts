@@ -8,7 +8,7 @@ export async function GET(
   const { id } = await ctx.params;
 
   const res = await authedFetch(
-    `/api/v1/admin/products/${encodeURIComponent(id)}/accessories`,
+    `/admin/products/${encodeURIComponent(id)}/accessories`,
   );
 
   const body = await res.text();
@@ -26,7 +26,7 @@ export async function PUT(
   const { id } = await ctx.params;
 
   const res = await authedFetch(
-    `/api/v1/admin/products/${encodeURIComponent(id)}/accessories`,
+    `/admin/products/${encodeURIComponent(id)}/accessories`,
     {
       method: "PUT",
       headers: { "Content-Type": "application/json" },

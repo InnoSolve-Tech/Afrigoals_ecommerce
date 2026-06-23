@@ -564,7 +564,7 @@ export default async function OrderDetailPage({
   const { id } = await params;
   const { payment } = await searchParams;
 
-  const res = await authedFetch(`/api/v1/orders/${encodeURIComponent(id)}`);
+  const res = await authedFetch(`/orders/${encodeURIComponent(id)}`);
 
   if (res.status === 401) {
     redirect(`/signin?next=${encodeURIComponent(`/orders/${id}`)}`);

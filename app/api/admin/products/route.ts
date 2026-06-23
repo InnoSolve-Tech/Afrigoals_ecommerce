@@ -19,7 +19,7 @@ export async function GET(req: Request) {
   if (featured) qs.set("featured", featured);
 
   const res = await authedFetch(
-    `/api/v1/products${qs.toString() ? `?${qs}` : ""}`,
+    `/products${qs.toString() ? `?${qs}` : ""}`,
   );
 
   const body = await res.text();
@@ -31,7 +31,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const res = await authedFetch("/api/v1/products", {
+  const res = await authedFetch("/products", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: await req.text(),

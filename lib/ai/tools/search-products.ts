@@ -30,7 +30,7 @@ export const searchProductsTool = tool({
       ).replace(/\/+$/, "");
 
       const res = await fetch(
-        `${apiBaseUrl}/api/v1/products${query ? `?q=${encodeURIComponent(query)}` : ""}`,
+        `${apiBaseUrl}/products${query ? `?q=${encodeURIComponent(query)}` : ""}`,
         { headers: { Accept: "application/json" }, cache: "no-store" },
       );
       if (!res.ok) {

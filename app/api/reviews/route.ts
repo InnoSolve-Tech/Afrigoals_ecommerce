@@ -9,8 +9,8 @@ function getApiBaseUrl() {
 
   const cleaned = raw.replace(/\/+$/, "");
 
-  if (!cleaned.endsWith("/api/v1")) {
-    throw new Error("NEXT_PUBLIC_API_URL must end with /api/v1");
+  if (!cleaned.endsWith("")) {
+    throw new Error("NEXT_PUBLIC_API_URL must end with ");
   }
 
   return cleaned;

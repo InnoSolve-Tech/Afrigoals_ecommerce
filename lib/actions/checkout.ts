@@ -45,15 +45,15 @@ function getApiBaseUrl() {
   const raw =
     process.env.AFRIGOALS_API_URL ||
     process.env.NEXT_PUBLIC_API_URL ||
-    "http://localhost:8080/api/v1";
+    "http://localhost:8080";
 
   const cleaned = raw.replace(/\/+$/, "");
 
-  if (cleaned.endsWith("/api/v1")) {
+  if (cleaned.endsWith("")) {
     return cleaned;
   }
 
-  return `${cleaned}/api/v1`;
+  return `${cleaned}`;
 }
 
 function cleanPhone(value: string | undefined): string {

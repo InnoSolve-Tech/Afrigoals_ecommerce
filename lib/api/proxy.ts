@@ -5,7 +5,7 @@ export function getBackendBaseUrl() {
   return (
     process.env.AFRIGOALS_API_URL ||
     process.env.NEXT_PUBLIC_API_URL ||
-    "http://localhost:8080"
+    "http://localhost:8080/api/v1"
   ).replace(/\/+$/, "");
 }
 

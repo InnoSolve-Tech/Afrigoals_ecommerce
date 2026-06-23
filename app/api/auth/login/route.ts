@@ -4,13 +4,13 @@ import { AUTH_COOKIE_NAME } from "@/lib/auth/constants";
 const apiBaseUrl = (
   process.env.AFRIGOALS_API_URL ||
   process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:8080"
+  "http://localhost:8080/api/v1"
 ).replace(/\/+$/, "");
 
 export async function POST(req: Request) {
   const body = await req.json();
 
-  const res = await fetch(`${apiBaseUrl}/api/v1/auth/login`, {
+  const res = await fetch(`${apiBaseUrl}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify(body),
