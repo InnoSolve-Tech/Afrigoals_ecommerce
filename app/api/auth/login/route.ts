@@ -1,37 +1,53 @@
+// app/api/auth/login/route.ts
 import { NextResponse } from "next/server";
-import { AUTH_COOKIE_NAME } from "@/lib/auth/constants";
 
 const apiBaseUrl = (
   process.env.AFRIGOALS_API_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
   "http://localhost:8080/api/v1"
 ).replace(/\/+$/, "");
 
 export async function POST(req: Request) {
-  const body = await req.json();
+  let body: { email?: string; password?: string };
+
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "invalid json" }, { status: 400 });
+  }
+
+  const email = String(body.email || "").trim().toLowerCase();
+  const password = String(body.password || "");
+
+  if (!email || !password) {
+    return NextResponse.json(
+      { error: "email and password are required" },
+      { status: 400 },
+    );
+  }
 
   const res = await fetch(`${apiBaseUrl}/auth/login`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(body),
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ email, password }),
+    cache: "no-store",
   });
 
   const data = await res.json().catch(() => ({}));
+
   if (!res.ok) {
-    return NextResponse.json(data, { status: res.status });
+    return NextResponse.json(
+      { error: (data as any)?.error || "Failed to sign in" },
+      { status: res.status },
+    );
   }
 
-  const token = (data as any)?.token;
-  if (!token) {
-    return NextResponse.json({ error: "missing token" }, { status: 500 });
-  }
-
-  const response = NextResponse.json({ ok: true });
-  response.cookies.set(AUTH_COOKIE_NAME, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
+  return NextResponse.json({
+    requires2fa: Boolean((data as any)?.requires2fa),
+    challengeId: (data as any)?.challengeId,
+    maskedEmail: (data as any)?.maskedEmail,
+    message: (data as any)?.message || "verification code sent",
   });
-  return response;
 }

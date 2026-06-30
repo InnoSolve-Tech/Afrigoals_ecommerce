@@ -24,12 +24,109 @@ type PendingFile = {
   previewUrl: string;
 };
 
+type ProductVariant = {
+  size?: string;
+  color?: string;
+  stock: number;
+};
+
+type StockMode = "total" | "size" | "color" | "size_color";
+
+type FlexibleApiProduct = ApiProduct & {
+  category?: string;
+  sport?: string;
+  sportCategory?: string;
+  sport_category?: string;
+  isFeatured?: boolean;
+  is_featured?: boolean;
+  variants?: ProductVariant[];
+};
+
+const PRODUCT_CATEGORIES = [
+  { value: "general", label: "General" },
+  { value: "jerseys", label: "Jerseys" },
+  { value: "shoes", label: "Shoes" },
+  { value: "accessories", label: "Accessories" },
+  { value: "training", label: "Training" },
+  { value: "gym", label: "Gym" },
+  { value: "merchandise", label: "Merchandise" },
+] as const;
+
+const SPORT_CATEGORIES = [
+  { value: "football", label: "Football" },
+  { value: "basketball", label: "Basketball" },
+  { value: "tennis", label: "Tennis" },
+  { value: "running", label: "Running" },
+  { value: "cricket", label: "Cricket" },
+  { value: "rugby", label: "Rugby" },
+  { value: "volleyball", label: "Volleyball" },
+  { value: "gym", label: "Gym" },
+] as const;
+
+const STANDARD_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"] as const;
+
 function slugify(input: string) {
   return input
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function normalizeProductVariants(product?: FlexibleApiProduct | null): ProductVariant[] {
+  const raw = product?.variants;
+
+  if (!Array.isArray(raw)) return [];
+
+  return raw
+    .map((item: any) => ({
+      size: String(item.size || "").trim() || undefined,
+      color: String(item.color || item.colour || "").trim() || undefined,
+      stock: Number(item.stock || item.qty || item.quantity || 0),
+    }))
+    .filter((item) => item.stock > 0 && (item.size || item.color));
+}
+
+function inferStockMode(variants: ProductVariant[]): StockMode {
+  const hasSize = variants.some((item) => Boolean(item.size));
+  const hasColor = variants.some((item) => Boolean(item.color));
+
+  if (hasSize && hasColor) return "size_color";
+  if (hasSize) return "size";
+  if (hasColor) return "color";
+
+  return "total";
+}
+
+function emptyVariantForMode(mode: StockMode): ProductVariant {
+  return {
+    size: mode === "size" || mode === "size_color" ? "" : undefined,
+    color: mode === "color" || mode === "size_color" ? "" : undefined,
+    stock: 0,
+  };
+}
+
+function cleanVariantsForMode(mode: StockMode, variants: ProductVariant[]) {
+  if (mode === "total") return [];
+
+  return variants
+    .map((item) => ({
+      size:
+        mode === "size" || mode === "size_color"
+          ? String(item.size || "").trim()
+          : undefined,
+      color:
+        mode === "color" || mode === "size_color"
+          ? String(item.color || "").trim()
+          : undefined,
+      stock: Math.max(0, Number(item.stock || 0)),
+    }))
+    .filter((item) => {
+      if (item.stock <= 0) return false;
+      if (mode === "size") return Boolean(item.size);
+      if (mode === "color") return Boolean(item.color);
+      return Boolean(item.size) && Boolean(item.color);
+    });
 }
 
 type Props = {
@@ -55,9 +152,14 @@ export function ProductUpsertDialog({
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("general");
+  const [sport, setSport] = useState("football");
+  const [isFeatured, setIsFeatured] = useState(false);
   const [currency, setCurrency] = useState("UGX");
   const [price, setPrice] = useState("0");
   const [stock, setStock] = useState("0");
+  const [stockMode, setStockMode] = useState<StockMode>("total");
+  const [variants, setVariants] = useState<ProductVariant[]>([]);
   const [images, setImages] = useState<string[]>([]);
   const [imageUrl, setImageUrl] = useState("");
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
@@ -66,10 +168,23 @@ export function ProductUpsertDialog({
     () => Number(price.replaceAll(",", "")) || 0,
     [price],
   );
+
   const stockNumber = useMemo(
     () => Number(stock.replaceAll(",", "")) || 0,
     [stock],
   );
+
+  const validVariants = useMemo(
+    () => cleanVariantsForMode(stockMode, variants),
+    [stockMode, variants],
+  );
+
+  const variantStockTotal = useMemo(
+    () => validVariants.reduce((total, item) => total + Number(item.stock || 0), 0),
+    [validVariants],
+  );
+
+  const finalStock = stockMode === "total" ? Math.max(0, stockNumber) : variantStockTotal;
 
   useEffect(() => {
     if (!open) return;
@@ -77,43 +192,138 @@ export function ProductUpsertDialog({
     setError(null);
     setSaving(false);
     setUploading(false);
-    // Reset any pending file previews when opening.
     setPendingFiles((prev) => {
       for (const p of prev) URL.revokeObjectURL(p.previewUrl);
       return [];
     });
 
     if (mode === "edit" && product) {
-      setName(product.name ?? "");
-      setSlug(product.slug ?? "");
-      setDescription(product.description ?? "");
-      setCurrency((product.currency || "UGX").toUpperCase());
-      setPrice(String(product.price ?? 0));
-      setStock(String(product.stock ?? 0));
-      setImages(product.images ?? []);
+      const flexibleProduct = product as FlexibleApiProduct;
+      const existingVariants = normalizeProductVariants(flexibleProduct);
+      const nextStockMode = inferStockMode(existingVariants);
+
+      setName(flexibleProduct.name ?? "");
+      setSlug(flexibleProduct.slug ?? "");
+      setDescription(flexibleProduct.description ?? "");
+      setCategory(String(flexibleProduct.category || "general"));
+      setSport(
+        String(
+          flexibleProduct.sport ||
+            flexibleProduct.sportCategory ||
+            flexibleProduct.sport_category ||
+            "football",
+        ),
+      );
+      setIsFeatured(Boolean(flexibleProduct.isFeatured ?? flexibleProduct.is_featured));
+      setCurrency((flexibleProduct.currency || "UGX").toUpperCase());
+      setPrice(String(flexibleProduct.price ?? 0));
+      setStock(String(flexibleProduct.stock ?? 0));
+      setStockMode(nextStockMode);
+      setVariants(existingVariants);
+      setImages(flexibleProduct.images ?? []);
       setImageUrl("");
       return;
     }
 
-    // create
     setName("");
     setSlug("");
     setDescription("");
+    setCategory("general");
+    setSport("football");
+    setIsFeatured(false);
     setCurrency("UGX");
     setPrice("0");
     setStock("0");
+    setStockMode("total");
+    setVariants([]);
     setImages([]);
     setImageUrl("");
   }, [open, mode, product]);
 
   useEffect(() => {
     if (open) return;
-    // Cleanup previews when closing the dialog.
+
     setPendingFiles((prev) => {
       for (const p of prev) URL.revokeObjectURL(p.previewUrl);
       return [];
     });
   }, [open]);
+
+  function onStockModeChange(nextMode: StockMode) {
+    setStockMode(nextMode);
+    setError(null);
+
+    if (nextMode === "total") {
+      return;
+    }
+
+    setVariants((current) => {
+      if (current.length > 0) {
+        return current.map((item) => ({
+          size: nextMode === "size" || nextMode === "size_color" ? item.size || "" : undefined,
+          color: nextMode === "color" || nextMode === "size_color" ? item.color || "" : undefined,
+          stock: Number(item.stock || 0),
+        }));
+      }
+
+      return [emptyVariantForMode(nextMode)];
+    });
+  }
+
+  function updateVariant(index: number, patch: Partial<ProductVariant>) {
+    setVariants((current) =>
+      current.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, ...patch } : item,
+      ),
+    );
+  }
+
+  function getStandardSizeStock(size: string) {
+    const found = variants.find(
+      (item) => String(item.size || "").toUpperCase() === size.toUpperCase(),
+    );
+
+    return found ? String(found.stock || "") : "";
+  }
+
+  function setStandardSizeStock(size: string, value: string) {
+    const nextStock = Math.max(0, Number(value.replaceAll(",", "")) || 0);
+
+    setVariants((current) => {
+      const existingIndex = current.findIndex(
+        (item) => String(item.size || "").toUpperCase() === size.toUpperCase(),
+      );
+
+      if (existingIndex >= 0) {
+        return current.map((item, index) =>
+          index === existingIndex
+            ? {
+                size,
+                color: undefined,
+                stock: nextStock,
+              }
+            : item,
+        );
+      }
+
+      return [
+        ...current,
+        {
+          size,
+          color: undefined,
+          stock: nextStock,
+        },
+      ];
+    });
+  }
+
+  function addVariant() {
+    setVariants((current) => [...current, emptyVariantForMode(stockMode)]);
+  }
+
+  function removeVariant(index: number) {
+    setVariants((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  }
 
   function addFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -160,9 +370,7 @@ export function ProductUpsertDialog({
           method: "POST",
           body: fd,
         });
-        const data = (await res
-          .json()
-          .catch(() => null)) as UploadResult | null;
+        const data = (await res.json().catch(() => null)) as UploadResult | null;
         if (!res.ok || !data?.url) {
           setError((data as any)?.error || "Upload failed");
           return null;
@@ -184,8 +392,14 @@ export function ProductUpsertDialog({
       return;
     }
 
+    if (stockMode !== "total" && validVariants.length === 0) {
+      setError("Add at least one valid variant with stock.");
+      return;
+    }
+
     setSaving(true);
     setError(null);
+
     try {
       const uploadedUrls = await uploadPendingFiles();
       if (uploadedUrls == null) return;
@@ -196,14 +410,20 @@ export function ProductUpsertDialog({
         return;
       }
 
+      const finalSlug = slug.trim() || slugify(name);
+
       const payload = {
         name: name.trim(),
-        slug: slug.trim(),
+        slug: finalSlug,
         description: description.trim(),
+        category,
+        sport,
+        isFeatured,
         currency: currency.trim(),
         price: priceNumber,
         images: finalImages,
-        stock: Math.max(0, stockNumber),
+        stock: finalStock,
+        variants: validVariants,
       };
 
       const res =
@@ -225,7 +445,6 @@ export function ProductUpsertDialog({
         return;
       }
 
-      // cleanup pending previews after a successful save
       setPendingFiles((prev) => {
         for (const p of prev) URL.revokeObjectURL(p.previewUrl);
         return [];
@@ -244,7 +463,7 @@ export function ProductUpsertDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
@@ -262,7 +481,7 @@ export function ProductUpsertDialog({
                   setSlug(slugify(next));
                 }
               }}
-              placeholder="e.g., New Shirt"
+              placeholder="e.g., Uganda Cranes Jersey"
             />
           </div>
 
@@ -272,7 +491,7 @@ export function ProductUpsertDialog({
               id="product-slug"
               value={slug}
               onChange={(e) => setSlug(slugify(e.target.value))}
-              placeholder="e.g., new-shirt (optional)"
+              placeholder="e.g., uganda-cranes-jersey"
             />
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
               Used for the product URL. Leave blank to auto-generate.
@@ -292,6 +511,52 @@ export function ProductUpsertDialog({
 
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="grid gap-2">
+              <Label htmlFor="product-category">Category</Label>
+              <select
+                id="product-category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              >
+                {PRODUCT_CATEGORIES.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="product-sport">Sport</Label>
+              <select
+                id="product-sport"
+                value={sport}
+                onChange={(e) => setSport(e.target.value)}
+                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              >
+                {SPORT_CATEGORIES.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <label className="flex items-center gap-2 rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800">
+              <input
+                type="checkbox"
+                checked={isFeatured}
+                onChange={(e) => setIsFeatured(e.target.checked)}
+                className="h-4 w-4 rounded border-zinc-300"
+              />
+              <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                Featured product
+              </span>
+            </label>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-2">
               <Label htmlFor="product-currency">Currency</Label>
               <Input
                 id="product-currency"
@@ -307,6 +572,7 @@ export function ProductUpsertDialog({
                 placeholder="UGX"
               />
             </div>
+
             <div className="grid gap-2">
               <Label htmlFor="product-price">Price</Label>
               <Input
@@ -320,8 +586,26 @@ export function ProductUpsertDialog({
                 Preview: {formatPrice(priceNumber, currency)}
               </p>
             </div>
+
             <div className="grid gap-2">
-              <Label htmlFor="product-stock">Stock</Label>
+              <Label htmlFor="product-stock-mode">Stock tracking</Label>
+              <select
+                id="product-stock-mode"
+                value={stockMode}
+                onChange={(e) => onStockModeChange(e.target.value as StockMode)}
+                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              >
+                <option value="total">Total stock only</option>
+                <option value="size">Stock by standard sizes</option>
+                <option value="color">Stock by colour</option>
+                <option value="size_color">Stock by size and colour</option>
+              </select>
+            </div>
+          </div>
+
+          {stockMode === "total" ? (
+            <div className="grid gap-2 sm:max-w-xs">
+              <Label htmlFor="product-stock">Total stock</Label>
               <Input
                 id="product-stock"
                 value={stock}
@@ -330,7 +614,116 @@ export function ProductUpsertDialog({
                 inputMode="numeric"
               />
             </div>
-          </div>
+          ) : stockMode === "size" ? (
+            <div className="grid gap-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+              <div>
+                <Label>Standard size stock</Label>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  Fill the number of pieces available for each size. Leave unused
+                  sizes empty or zero.
+                </p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-4">
+                {STANDARD_SIZES.map((size) => (
+                  <div key={size} className="grid gap-1">
+                    <Label htmlFor={`product-size-${size}`}>{size}</Label>
+                    <Input
+                      id={`product-size-${size}`}
+                      value={getStandardSizeStock(size)}
+                      onChange={(e) => setStandardSizeStock(size, e.target.value)}
+                      placeholder="0"
+                      inputMode="numeric"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Total size stock:{" "}
+                <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                  {variantStockTotal}
+                </span>
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <Label>
+                    {stockMode === "color"
+                      ? "Colour stock"
+                      : "Size and colour variants"}
+                  </Label>
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                    {stockMode === "color"
+                      ? "Record each colour and how many pieces are available for that colour."
+                      : "Record each size and colour combination with the available quantity."}
+                  </p>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={addVariant}>
+                  {stockMode === "color" ? "Add colour" : "Add variant"}
+                </Button>
+              </div>
+
+              <div className="grid gap-2">
+                {variants.map((item, index) => (
+                  <div
+                    key={index}
+                    className="grid gap-2 rounded-lg border border-zinc-100 p-2 dark:border-zinc-900 sm:grid-cols-[1fr_1fr_120px_auto]"
+                  >
+                    {stockMode === "size_color" ? (
+                      <Input
+                        value={item.size || ""}
+                        onChange={(e) => updateVariant(index, { size: e.target.value })}
+                        placeholder="Size e.g. S, M, L, XL"
+                      />
+                    ) : (
+                      <div className="hidden sm:block" />
+                    )}
+
+                    {(stockMode === "color" || stockMode === "size_color") ? (
+                      <Input
+                        value={item.color || ""}
+                        onChange={(e) => updateVariant(index, { color: e.target.value })}
+                        placeholder="Colour e.g. Blue"
+                      />
+                    ) : (
+                      <div className="hidden sm:block" />
+                    )}
+
+                    <Input
+                      value={String(item.stock ?? 0)}
+                      onChange={(e) =>
+                        updateVariant(index, {
+                          stock: Number(e.target.value.replaceAll(",", "")) || 0,
+                        })
+                      }
+                      placeholder="Qty"
+                      inputMode="numeric"
+                    />
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => removeVariant(index)}
+                      disabled={variants.length <= 1}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Total variant stock:{" "}
+                <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                  {variantStockTotal}
+                </span>
+              </p>
+            </div>
+          )}
 
           <div className="grid gap-2">
             <Label>Images</Label>
@@ -385,6 +778,7 @@ export function ProductUpsertDialog({
                     </button>
                   </div>
                 ))}
+
                 {pendingFiles.map((p) => (
                   <div
                     key={p.id}

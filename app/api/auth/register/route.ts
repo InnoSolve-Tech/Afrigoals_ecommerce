@@ -1,37 +1,67 @@
 import { NextResponse } from "next/server";
-import { AUTH_COOKIE_NAME } from "@/lib/auth/constants";
 
-const apiBaseUrl = (
-  process.env.AFRIGOALS_API_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:8080"
-).replace(/\/+$/, "");
+const API_BASE_URL = (
+  process.env.AFRIGOALS_API_URL || "http://localhost:8080/api/v1"
+).replace(/\/$/, "");
 
 export async function POST(req: Request) {
-  const body = await req.json();
+  try {
+    const body = await req.json().catch(() => ({}));
 
-  const res = await fetch(`${apiBaseUrl}/auth/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(body),
-  });
+    const name = String(body?.name || "").trim();
+    const email = String(body?.email || "").trim().toLowerCase();
+    const password = String(body?.password || "");
 
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    return NextResponse.json(data, { status: res.status });
+    if (!email || !password) {
+      return NextResponse.json(
+        { error: "email and password are required" },
+        { status: 400 }
+      );
+    }
+
+    const backendRes = await fetch(`${API_BASE_URL}/auth/register`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      cache: "no-store",
+      body: JSON.stringify({
+        name,
+        email,
+        password,
+      }),
+    });
+
+    const data = await backendRes.json().catch(() => ({}));
+
+    if (!backendRes.ok) {
+      return NextResponse.json(
+        { error: data?.error || "Failed to create account" },
+        { status: backendRes.status }
+      );
+    }
+
+    if (!data?.requiresEmailVerification || !data?.challengeId) {
+      return NextResponse.json(
+        { error: "Invalid register response from backend" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        requiresEmailVerification: true,
+        challengeId: data.challengeId,
+        maskedEmail: data.maskedEmail,
+        message: data.message || "verification code sent",
+      },
+      { status: 201 }
+    );
+  } catch {
+    return NextResponse.json(
+      { error: "Failed to create account" },
+      { status: 500 }
+    );
   }
-
-  const token = (data as any)?.token;
-  if (!token) {
-    return NextResponse.json({ error: "missing token" }, { status: 500 });
-  }
-
-  const response = NextResponse.json({ ok: true });
-  response.cookies.set(AUTH_COOKIE_NAME, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-  });
-  return response;
 }
