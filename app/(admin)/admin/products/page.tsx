@@ -33,6 +33,12 @@ const SPORT_CATEGORIES = [
   { value: "gym", label: "Gym" },
 ] as const;
 
+type ProductVariant = {
+  size?: string;
+  color?: string;
+  stock: number;
+};
+
 type FlexibleApiProduct = ApiProduct & {
   category?: string;
   sport?: string;
@@ -40,6 +46,7 @@ type FlexibleApiProduct = ApiProduct & {
   sport_category?: string;
   isFeatured?: boolean;
   is_featured?: boolean;
+  variants?: ProductVariant[];
 };
 
 function getProductCategory(product: FlexibleApiProduct) {
@@ -58,6 +65,38 @@ function productIsFeatured(product: FlexibleApiProduct) {
   return Boolean(product.isFeatured ?? product.is_featured);
 }
 
+function normalizeProductVariants(product: FlexibleApiProduct): ProductVariant[] {
+  const raw = (product as any).variants;
+
+  if (!Array.isArray(raw)) return [];
+
+  return raw
+    .map((item: any) => ({
+      size: String(item.size || "").trim() || undefined,
+      color: String(item.color || item.colour || "").trim() || undefined,
+      stock: Number(item.stock || item.qty || item.quantity || 0),
+    }))
+    .filter((item) => item.stock > 0 && (item.size || item.color));
+}
+
+function getProductStock(product: FlexibleApiProduct) {
+  const variants = normalizeProductVariants(product);
+
+  if (variants.length === 0) {
+    return Number(product.stock || 0);
+  }
+
+  return variants.reduce((total, item) => total + Number(item.stock || 0), 0);
+}
+
+function getVariantSummary(product: FlexibleApiProduct) {
+  const variants = normalizeProductVariants(product);
+
+  if (variants.length === 0) return "";
+
+  return `${variants.length} variant${variants.length === 1 ? "" : "s"}`;
+}
+
 function formatCategoryLabel(category?: string | null) {
   const raw = String(category || "general").trim();
 
@@ -66,20 +105,20 @@ function formatCategoryLabel(category?: string | null) {
 
   return raw
     .replaceAll("_", " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+    .replace(/\w/g, (char) => char.toUpperCase());
 }
 
 function formatSportLabel(sport?: string | null) {
   const raw = String(sport || "").trim();
 
-  if (!raw) return "—";
+  if (!raw) return "?";
 
   const found = SPORT_CATEGORIES.find((item) => item.value === raw);
   if (found) return found.label;
 
   return raw
     .replaceAll("_", " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+    .replace(/\w/g, (char) => char.toUpperCase());
 }
 
 function buildProductPayload(
@@ -88,8 +127,17 @@ function buildProductPayload(
     category: string;
     sport: string;
     isFeatured: boolean;
+    stock: number;
+    variants: ProductVariant[];
   }>,
 ) {
+  const variants = updates.variants ?? normalizeProductVariants(product);
+
+  const stock =
+    variants.length > 0
+      ? variants.reduce((total, item) => total + Number(item.stock || 0), 0)
+      : Number(updates.stock ?? product.stock ?? 0);
+
   return {
     slug: product.slug,
     name: product.name,
@@ -100,7 +148,8 @@ function buildProductPayload(
     currency: product.currency || "UGX",
     price: Number(product.price || 0),
     images: product.images || [],
-    stock: Number(product.stock || 0),
+    stock,
+    variants,
   };
 }
 
@@ -462,8 +511,13 @@ export default function AdminProductsPage() {
                         Stock
                       </p>
                       <p className="font-medium text-zinc-900 dark:text-zinc-100">
-                        {p.stock}
+                        {getProductStock(p)}
                       </p>
+                      {getVariantSummary(p) ? (
+                        <p className="mt-1 text-xs text-blue-600 dark:text-blue-400">
+                          {getVariantSummary(p)}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
 
@@ -730,7 +784,14 @@ export default function AdminProductsPage() {
                           {formatPrice(p.price, p.currency)}
                         </td>
 
-                        <td className="px-4 py-3">{p.stock}</td>
+                        <td className="px-4 py-3">
+                          <div>{getProductStock(p)}</div>
+                          {getVariantSummary(p) ? (
+                            <div className="mt-1 text-xs text-blue-600 dark:text-blue-400">
+                              {getVariantSummary(p)}
+                            </div>
+                          ) : null}
+                        </td>
 
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-2">
