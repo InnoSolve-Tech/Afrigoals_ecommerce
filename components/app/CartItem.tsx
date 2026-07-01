@@ -28,6 +28,49 @@ type CartAccessoryLike = {
   price?: number;
 };
 
+type VariantAwareCartItem = CartItemType & {
+  variantKey?: string | null;
+  selectedSize?: string | null;
+  selectedColor?: string | null;
+  size?: string | null;
+  color?: string | null;
+  colour?: string | null;
+  variant?: {
+    _key?: string | null;
+    id?: string | null;
+    size?: string | null;
+    color?: string | null;
+    colour?: string | null;
+  } | null;
+};
+
+function cleanText(value?: string | null) {
+  const cleaned = String(value || "").trim();
+  return cleaned.length > 0 ? cleaned : null;
+}
+
+function getVariantKey(item: VariantAwareCartItem) {
+  return cleanText(item.variantKey || item.variant?._key || item.variant?.id);
+}
+
+function getSelectedSize(item: VariantAwareCartItem) {
+  return cleanText(item.selectedSize || item.size || item.variant?.size);
+}
+
+function getSelectedColor(item: VariantAwareCartItem) {
+  return cleanText(
+    item.selectedColor ||
+      item.color ||
+      item.colour ||
+      item.variant?.color ||
+      item.variant?.colour,
+  );
+}
+
+function hasVariantSelection(item: VariantAwareCartItem) {
+  return Boolean(getSelectedSize(item) || getSelectedColor(item));
+}
+
 function hasAccessories(item: CartItemType) {
   return Array.isArray(item.accessories) && item.accessories.length > 0;
 }
@@ -69,6 +112,12 @@ function getItemLineTotal(item: CartItemType) {
 
 export function CartItem({ item, stockInfo }: CartItemProps) {
   const { removeItem } = useCartActions();
+
+  const variantItem = item as VariantAwareCartItem;
+
+  const variantKey = getVariantKey(variantItem);
+  const selectedSize = getSelectedSize(variantItem);
+  const selectedColor = getSelectedColor(variantItem);
 
   const isOutOfStock = stockInfo?.isOutOfStock ?? false;
   const exceedsStock = stockInfo?.exceedsStock ?? false;
@@ -124,6 +173,26 @@ export function CartItem({ item, stockInfo }: CartItemProps) {
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
               Ready for checkout
             </p>
+
+            {hasVariantSelection(variantItem) ? (
+              <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                {selectedSize ? (
+                  <span className="rounded-full bg-zinc-100 px-2 py-0.5 font-medium text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+                    Size: {selectedSize}
+                  </span>
+                ) : null}
+
+                {selectedColor ? (
+                  <span className="rounded-full bg-zinc-100 px-2 py-0.5 font-medium text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+                    Colour: {selectedColor}
+                  </span>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-red-500">
+                Variant not selected
+              </p>
+            )}
 
             {hasAccessories(item) ? (
               <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm dark:border-zinc-700 dark:bg-zinc-900">
@@ -216,7 +285,14 @@ export function CartItem({ item, stockInfo }: CartItemProps) {
             variant="ghost"
             size="icon"
             className="h-8 w-8 shrink-0 text-zinc-400 hover:text-red-500"
-            onClick={() => removeItem(item.productId)}
+            onClick={() =>
+              removeItem(
+                item.productId,
+                variantKey,
+                selectedSize,
+                selectedColor,
+              )
+            }
           >
             <Trash2 className="h-4 w-4" />
             <span className="sr-only">Remove {item.name}</span>
@@ -275,6 +351,9 @@ export function CartItem({ item, stockInfo }: CartItemProps) {
                   className="h-10"
                   redirectToCartOnAdd={false}
                   accessories={item.accessories ?? []}
+                  variantKey={variantKey}
+                  selectedSize={selectedSize}
+                  selectedColor={selectedColor}
                 />
               </div>
             )}

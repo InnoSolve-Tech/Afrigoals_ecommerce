@@ -38,6 +38,15 @@ type OrderItemAccessory = {
   notes?: string;
 };
 
+type OrderItemVariant = {
+  key?: string | null;
+  _key?: string | null;
+  id?: string | null;
+  size?: string | null;
+  color?: string | null;
+  colour?: string | null;
+};
+
 type FlexibleOrderItem = ApiOrder["items"][number] & {
   accessoriesJson?: string;
   accessories_json?: string;
@@ -45,6 +54,28 @@ type FlexibleOrderItem = ApiOrder["items"][number] & {
   accessories_fee?: number;
   lineSubtotal?: number;
   line_subtotal?: number;
+
+  variantKey?: string | null;
+  variant_key?: string | null;
+  VariantKey?: string | null;
+
+  selectedSize?: string | null;
+  selected_size?: string | null;
+  SelectedSize?: string | null;
+  size?: string | null;
+  Size?: string | null;
+
+  selectedColor?: string | null;
+  selected_color?: string | null;
+  SelectedColor?: string | null;
+  color?: string | null;
+  colour?: string | null;
+  Color?: string | null;
+  Colour?: string | null;
+
+  variantJson?: string | null;
+  variant_json?: string | null;
+  variant?: OrderItemVariant | string | null;
 };
 
 type FlexibleApiOrder = ApiOrder & {
@@ -111,6 +142,118 @@ function parseOrderItemAccessories(raw?: string | null): OrderItemAccessory[] {
   } catch {
     return [];
   }
+}
+
+function cleanVariantText(value?: string | null) {
+  const cleaned = String(value || "").trim();
+  return cleaned.length > 0 ? cleaned : null;
+}
+
+function parseOrderItemVariantJson(raw?: string | OrderItemVariant | null) {
+  if (!raw) return null;
+
+  if (typeof raw === "object") {
+    return raw;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+
+    return parsed as OrderItemVariant;
+  } catch {
+    return null;
+  }
+}
+
+function getVariantObject(item: FlexibleOrderItem) {
+  if (item.variant && typeof item.variant === "object") {
+    return item.variant;
+  }
+
+  if (typeof item.variant === "string") {
+    return parseOrderItemVariantJson(item.variant);
+  }
+
+  return parseOrderItemVariantJson(item.variantJson || item.variant_json);
+}
+
+function getOrderItemVariantKey(item: FlexibleOrderItem) {
+  const variant = getVariantObject(item);
+
+  return cleanVariantText(
+    item.variantKey ||
+      item.variant_key ||
+      item.VariantKey ||
+      variant?.key ||
+      variant?._key ||
+      variant?.id,
+  );
+}
+
+function getOrderItemSize(item: FlexibleOrderItem) {
+  const variant = getVariantObject(item);
+
+  return cleanVariantText(
+    item.selectedSize ||
+      item.selected_size ||
+      item.SelectedSize ||
+      item.size ||
+      item.Size ||
+      variant?.size,
+  );
+}
+
+function getOrderItemColor(item: FlexibleOrderItem) {
+  const variant = getVariantObject(item);
+
+  return cleanVariantText(
+    item.selectedColor ||
+      item.selected_color ||
+      item.SelectedColor ||
+      item.color ||
+      item.colour ||
+      item.Color ||
+      item.Colour ||
+      variant?.color ||
+      variant?.colour,
+  );
+}
+
+function orderItemHasVariant(item: FlexibleOrderItem) {
+  return Boolean(
+    getOrderItemVariantKey(item) ||
+      getOrderItemSize(item) ||
+      getOrderItemColor(item),
+  );
+}
+
+function OrderItemVariantBadges({ item }: { item: FlexibleOrderItem }) {
+  const size = getOrderItemSize(item);
+  const color = getOrderItemColor(item);
+
+  if (!orderItemHasVariant(item)) {
+    return null;
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-2 text-xs">
+      {size ? (
+        <span className="rounded-full bg-zinc-100 px-2 py-0.5 font-medium text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+          Size: {size}
+        </span>
+      ) : null}
+
+      {color ? (
+        <span className="rounded-full bg-zinc-100 px-2 py-0.5 font-medium text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+          Colour: {color}
+        </span>
+      ) : null}
+    </div>
+  );
 }
 
 function getAccessoriesJson(item: FlexibleOrderItem) {
@@ -627,7 +770,7 @@ export default async function OrderDetailPage({
           </h2>
 
           <div className="space-y-5">
-            {items.map((item) => {
+            {items.map((item, index) => {
               const accessories = parseOrderItemAccessories(
                 getAccessoriesJson(item),
               );
@@ -643,7 +786,7 @@ export default async function OrderDetailPage({
 
               return (
                 <div
-                  key={item.id}
+                  key={item.id || `${item.productId || item.productName}-${index}`}
                   className="flex gap-4 border-b border-zinc-100 pb-5 last:border-b-0 last:pb-0 dark:border-zinc-800"
                 >
                   <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-md border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900">
@@ -672,6 +815,8 @@ export default async function OrderDetailPage({
                         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
                           Qty: {item.quantity}
                         </p>
+
+                        <OrderItemVariantBadges item={item} />
 
                         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
                           Unit price:{" "}

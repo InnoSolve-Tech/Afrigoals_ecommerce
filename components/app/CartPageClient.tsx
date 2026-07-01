@@ -24,7 +24,10 @@ import {
   useTotalItems,
   useTotalPrice,
 } from "@/lib/store/cart-store-provider";
-import type { CartItem as CartItemType } from "@/lib/store/cart-store";
+import {
+  getCartItemKey,
+  type CartItem as CartItemType,
+} from "@/lib/store/cart-store";
 import { formatPrice } from "@/lib/utils";
 
 type CartAccessoryLike = {
@@ -153,6 +156,7 @@ export function CartPageClient() {
   const cartSubtotal = productSubtotal + accessoriesTotal;
 
   const { stockMap, isLoading, hasStockIssues } = useCartStock(rawItems);
+
   const { products: recommendedProducts, isLoading: isLoadingRecommendations } =
     useCartRecommendations(rawItems);
 
@@ -233,12 +237,15 @@ export function CartPageClient() {
         <div className="mx-auto max-w-7xl px-4 py-16">
           <div className="mx-auto max-w-md text-center">
             <ShoppingBag className="mx-auto mb-6 h-16 w-16 text-gray-400 dark:text-gray-600" />
+
             <h1 className="mb-2 text-2xl font-bold text-foreground">
               Your basket is empty
             </h1>
+
             <p className="mb-8 text-gray-600 dark:text-gray-400">
               Start shopping to add items to your basket.
             </p>
+
             <Link
               href="/products"
               className="inline-flex rounded-lg bg-primary px-8 py-3 font-semibold text-primary-foreground transition hover:bg-primary/90"
@@ -259,10 +266,11 @@ export function CartPageClient() {
             <h1 className="text-3xl font-bold text-foreground md:text-4xl">
               Basket
             </h1>
+
             <p className="mt-1 text-gray-600 dark:text-gray-400">
               {totalItems} {totalItems === 1 ? "item" : "items"} ready for
               checkout
-              {(isLoading || isLoadingAccessories) ? (
+              {isLoading || isLoadingAccessories ? (
                 <Loader2 className="ml-2 inline h-4 w-4 animate-spin" />
               ) : null}
             </p>
@@ -282,6 +290,7 @@ export function CartPageClient() {
               <Truck className="h-5 w-5 text-blue-600 dark:text-blue-300" />
               <h2 className="font-semibold text-foreground">Fast delivery</h2>
             </div>
+
             <p className="text-sm text-blue-900/80 dark:text-blue-100/80">
               Review your basket now and confirm your shipping details at
               checkout.
@@ -293,6 +302,7 @@ export function CartPageClient() {
               <ShieldCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-300" />
               <h2 className="font-semibold text-foreground">Secure payment</h2>
             </div>
+
             <p className="text-sm text-emerald-900/80 dark:text-emerald-100/80">
               Your items stay ready in the basket while you head to checkout.
             </p>
@@ -303,6 +313,7 @@ export function CartPageClient() {
               <RefreshCcw className="h-5 w-5 text-amber-600 dark:text-amber-300" />
               <h2 className="font-semibold text-foreground">Easy returns</h2>
             </div>
+
             <p className="text-sm text-amber-900/80 dark:text-amber-100/80">
               Add the right pieces now, then adjust later if your order needs a
               change.
@@ -325,6 +336,7 @@ export function CartPageClient() {
                   <h2 className="text-2xl font-bold text-foreground">
                     Items in your basket
                   </h2>
+
                   <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
                     Confirm quantities, customization, and stock before checkout.
                   </p>
@@ -336,13 +348,17 @@ export function CartPageClient() {
               </div>
 
               <div className="space-y-4">
-                {items.map((item) => (
-                  <CartItem
-                    key={item.productId}
-                    item={item}
-                    stockInfo={stockMap.get(item.productId)}
-                  />
-                ))}
+                {items.map((item) => {
+                  const cartItemKey = getCartItemKey(item);
+
+                  return (
+                    <CartItem
+                      key={cartItemKey}
+                      item={item}
+                      stockInfo={stockMap.get(cartItemKey)}
+                    />
+                  );
+                })}
               </div>
             </section>
 
@@ -353,9 +369,11 @@ export function CartPageClient() {
                     <Sparkles className="h-3.5 w-3.5" />
                     Recommended
                   </div>
+
                   <h2 className="text-2xl font-bold text-foreground">
                     Recommended Products
                   </h2>
+
                   <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
                     A few related picks to help fill out the page and the basket.
                   </p>
@@ -394,6 +412,7 @@ export function CartPageClient() {
                       className="rounded-lg bg-white pl-9 dark:bg-gray-900"
                     />
                   </div>
+
                   <Button className="rounded-lg bg-primary hover:bg-primary/90">
                     Apply
                   </Button>
@@ -492,6 +511,7 @@ export function CartPageClient() {
                     <LockKeyhole className="h-4 w-4" />
                     Secure payment
                   </p>
+
                   <p className="flex items-center justify-center gap-2">
                     <Truck className="h-4 w-4" />
                     Delivery calculated from your checkout address
@@ -503,16 +523,19 @@ export function CartPageClient() {
                 <h3 className="text-lg font-semibold text-foreground">
                   Before you checkout
                 </h3>
+
                 <div className="mt-4 space-y-3 text-sm text-gray-600 dark:text-gray-400">
                   <p className="flex items-start gap-2">
                     <Truck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                     Delivery pricing is calculated once your address is
                     confirmed.
                   </p>
+
                   <p className="flex items-start gap-2">
                     <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                     Payments stay protected throughout the checkout flow.
                   </p>
+
                   <p className="flex items-start gap-2">
                     <RefreshCcw className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                     Review quantities now so the order feels right before

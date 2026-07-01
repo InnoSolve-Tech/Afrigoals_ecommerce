@@ -1,8 +1,7 @@
 import { persist } from "zustand/middleware";
 import { createStore } from "zustand/vanilla";
-import { CartItemAccessory } from "../api/types";
+import type { CartItemAccessory } from "../api/types";
 
-// Types
 export interface CartItem {
   productId: string;
   slug?: string;
@@ -12,6 +11,13 @@ export interface CartItem {
   image?: string;
   accessories?: CartItemAccessory[];
 
+  /**
+   * Variant fields.
+   * These allow the basket/order to know the exact size/colour selected.
+   */
+  variantKey?: string | null;
+  selectedSize?: string | null;
+  selectedColor?: string | null;
 }
 
 export interface CartState {
@@ -21,8 +27,22 @@ export interface CartState {
 
 export interface CartActions {
   addItem: (item: Omit<CartItem, "quantity">, quantity?: number) => void;
-  removeItem: (productId: string) => void;
-  updateQuantity: (productId: string, quantity: number) => void;
+
+  removeItem: (
+    productId: string,
+    variantKey?: string | null,
+    selectedSize?: string | null,
+    selectedColor?: string | null,
+  ) => void;
+
+  updateQuantity: (
+    productId: string,
+    quantity: number,
+    variantKey?: string | null,
+    selectedSize?: string | null,
+    selectedColor?: string | null,
+  ) => void;
+
   clearCart: () => void;
   toggleCart: () => void;
   openCart: () => void;
@@ -31,17 +51,44 @@ export interface CartActions {
 
 export type CartStore = CartState & CartActions;
 
-// Default state
 export const defaultInitState: CartState = {
   items: [],
   isOpen: false,
 };
 
-/**
- * Cart store factory - creates new store instance per provider
- * Uses persist middleware with skipHydration for Next.js SSR compatibility
- * @see https://zustand.docs.pmnd.rs/guides/nextjs#hydration-and-asynchronous-storages
- */
+function normalizeCartValue(value?: string | null) {
+  return String(value || "").trim();
+}
+
+export function getCartItemKey(item: {
+  productId: string;
+  variantKey?: string | null;
+  selectedSize?: string | null;
+  selectedColor?: string | null;
+}) {
+  return [
+    normalizeCartValue(item.productId),
+    normalizeCartValue(item.variantKey),
+    normalizeCartValue(item.selectedSize),
+    normalizeCartValue(item.selectedColor),
+  ].join("::");
+}
+
+function sameCartLine(
+  item: CartItem,
+  productId: string,
+  variantKey?: string | null,
+  selectedSize?: string | null,
+  selectedColor?: string | null,
+) {
+  return (
+    item.productId === productId &&
+    normalizeCartValue(item.variantKey) === normalizeCartValue(variantKey) &&
+    normalizeCartValue(item.selectedSize) === normalizeCartValue(selectedSize) &&
+    normalizeCartValue(item.selectedColor) === normalizeCartValue(selectedColor)
+  );
+}
+
 export const createCartStore = (initState: CartState = defaultInitState) => {
   return createStore<CartStore>()(
     persist(
@@ -50,51 +97,135 @@ export const createCartStore = (initState: CartState = defaultInitState) => {
 
         addItem: (item, quantity = 1) =>
           set((state) => {
-            const existing = state.items.find(
-              (i) => i.productId === item.productId,
+            const normalizedItem: Omit<CartItem, "quantity"> = {
+              ...item,
+              variantKey: item.variantKey ?? null,
+              selectedSize: item.selectedSize ?? null,
+              selectedColor: item.selectedColor ?? null,
+            };
+
+            const existingItem = state.items.find((current) =>
+              sameCartLine(
+                current,
+                normalizedItem.productId,
+                normalizedItem.variantKey,
+                normalizedItem.selectedSize,
+                normalizedItem.selectedColor,
+              ),
             );
-            if (existing) {
+
+            if (existingItem) {
               return {
-                items: state.items.map((i) =>
-                  i.productId === item.productId
-                    ? { ...i, ...item, quantity: i.quantity + quantity }
-                    : i,
+                items: state.items.map((current) =>
+                  sameCartLine(
+                    current,
+                    normalizedItem.productId,
+                    normalizedItem.variantKey,
+                    normalizedItem.selectedSize,
+                    normalizedItem.selectedColor,
+                  )
+                    ? {
+                        ...current,
+                        quantity: current.quantity + quantity,
+                        accessories:
+                          normalizedItem.accessories ?? current.accessories,
+                      }
+                    : current,
                 ),
+                isOpen: true,
               };
             }
-            return { items: [...state.items, { ...item, quantity }] };
+
+            return {
+              items: [
+                ...state.items,
+                {
+                  ...normalizedItem,
+                  quantity,
+                },
+              ],
+              isOpen: true,
+            };
           }),
 
-        removeItem: (productId) =>
+        removeItem: (productId, variantKey, selectedSize, selectedColor) =>
           set((state) => ({
-            items: state.items.filter((i) => i.productId !== productId),
+            items: state.items.filter(
+              (item) =>
+                !sameCartLine(
+                  item,
+                  productId,
+                  variantKey,
+                  selectedSize,
+                  selectedColor,
+                ),
+            ),
           })),
 
-        updateQuantity: (productId, quantity) =>
+        updateQuantity: (
+          productId,
+          quantity,
+          variantKey,
+          selectedSize,
+          selectedColor,
+        ) =>
           set((state) => {
             if (quantity <= 0) {
               return {
-                items: state.items.filter((i) => i.productId !== productId),
+                items: state.items.filter(
+                  (item) =>
+                    !sameCartLine(
+                      item,
+                      productId,
+                      variantKey,
+                      selectedSize,
+                      selectedColor,
+                    ),
+                ),
               };
             }
+
             return {
-              items: state.items.map((i) =>
-                i.productId === productId ? { ...i, quantity } : i,
+              items: state.items.map((item) =>
+                sameCartLine(
+                  item,
+                  productId,
+                  variantKey,
+                  selectedSize,
+                  selectedColor,
+                )
+                  ? {
+                      ...item,
+                      quantity,
+                    }
+                  : item,
               ),
             };
           }),
 
-        clearCart: () => set({ items: [] }),
-        toggleCart: () => set((state) => ({ isOpen: !state.isOpen })),
-        openCart: () => set({ isOpen: true }),
-        closeCart: () => set({ isOpen: false }),
+        clearCart: () =>
+          set({
+            items: [],
+            isOpen: false,
+          }),
+
+        toggleCart: () =>
+          set((state) => ({
+            isOpen: !state.isOpen,
+          })),
+
+        openCart: () =>
+          set({
+            isOpen: true,
+          }),
+
+        closeCart: () =>
+          set({
+            isOpen: false,
+          }),
       }),
       {
-        name: "cart-storage",
-        // Skip automatic hydration - we'll trigger it manually on the client
-        skipHydration: true,
-        // Only persist items, not UI state like isOpen
-        partialize: (state) => ({ items: state.items }),
+        name: "afrigoals-cart",
       },
     ),
   );

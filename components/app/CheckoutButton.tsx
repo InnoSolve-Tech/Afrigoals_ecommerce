@@ -5,6 +5,7 @@ import { Loader2, CreditCard, Banknote } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useCartItems } from "@/lib/store/cart-store-provider";
+import type { CartItem } from "@/lib/store/cart-store";
 import { createCheckoutSession } from "@/lib/actions/checkout";
 import { createCashOnDeliveryOrder } from "@/lib/actions/create-cash-on-delivery-order";
 
@@ -26,6 +27,18 @@ interface CheckoutButtonProps {
   deliveryNote?: string;
 }
 
+type CheckoutPayloadItem = CartItem & {
+  size?: string | null;
+  color?: string | null;
+  colour?: string | null;
+  variant?: {
+    key?: string | null;
+    size?: string | null;
+    color?: string | null;
+    colour?: string | null;
+  };
+};
+
 function cleanPhone(value: string | undefined): string {
   return String(value || "")
     .trim()
@@ -34,6 +47,39 @@ function cleanPhone(value: string | undefined): string {
 
 function isValidPhone(value: string): boolean {
   return /^\+?[0-9]{7,15}$/.test(value);
+}
+
+function cleanText(value?: string | null) {
+  const cleaned = String(value || "").trim();
+  return cleaned.length > 0 ? cleaned : null;
+}
+
+function prepareCheckoutItems(items: CartItem[]): CheckoutPayloadItem[] {
+  return items.map((item) => {
+    const variantKey = cleanText(item.variantKey);
+    const selectedSize = cleanText(item.selectedSize);
+    const selectedColor = cleanText(item.selectedColor);
+
+    return {
+      ...item,
+
+      variantKey,
+      selectedSize,
+      selectedColor,
+
+      // Compatibility aliases for backend DTOs.
+      size: selectedSize,
+      color: selectedColor,
+      colour: selectedColor,
+
+      variant: {
+        key: variantKey,
+        size: selectedSize,
+        color: selectedColor,
+        colour: selectedColor,
+      },
+    };
+  });
 }
 
 export function CheckoutButton({
@@ -121,10 +167,17 @@ export function CheckoutButton({
 
     setError(null);
 
+    const checkoutItems = prepareCheckoutItems(items);
+
+    console.log(
+      "FRONTEND CHECKOUT ITEMS",
+      JSON.stringify(checkoutItems, null, 2),
+    );
+
     startTransition(async () => {
       try {
         if (paymentMethod === "cod") {
-          const result = await createCashOnDeliveryOrder(items, {
+          const result = await createCashOnDeliveryOrder(checkoutItems, {
             address: deliveryAddress.trim(),
             lat: deliveryLat,
             lng: deliveryLng,
@@ -164,7 +217,7 @@ export function CheckoutButton({
           return;
         }
 
-        const result = await createCheckoutSession(items, {
+        const result = await createCheckoutSession(checkoutItems, {
           address: deliveryAddress.trim(),
           lat: deliveryLat,
           lng: deliveryLng,

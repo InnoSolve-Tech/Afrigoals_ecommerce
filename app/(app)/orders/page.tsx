@@ -24,6 +24,15 @@ type OrderItemAccessory = {
   notes?: string;
 };
 
+type OrderItemVariant = {
+  key?: string | null;
+  _key?: string | null;
+  id?: string | null;
+  size?: string | null;
+  color?: string | null;
+  colour?: string | null;
+};
+
 type FlexibleApiOrderItem = ApiOrder["items"][number] & {
   accessoriesJson?: string;
   accessories_json?: string;
@@ -31,6 +40,28 @@ type FlexibleApiOrderItem = ApiOrder["items"][number] & {
   accessories_fee?: number;
   lineSubtotal?: number;
   line_subtotal?: number;
+
+  variantKey?: string | null;
+  variant_key?: string | null;
+  VariantKey?: string | null;
+
+  selectedSize?: string | null;
+  selected_size?: string | null;
+  SelectedSize?: string | null;
+  size?: string | null;
+  Size?: string | null;
+
+  selectedColor?: string | null;
+  selected_color?: string | null;
+  SelectedColor?: string | null;
+  color?: string | null;
+  colour?: string | null;
+  Color?: string | null;
+  Colour?: string | null;
+
+  variantJson?: string | null;
+  variant_json?: string | null;
+  variant?: OrderItemVariant | string | null;
 };
 
 type FlexibleApiOrder = ApiOrder & {
@@ -92,6 +123,122 @@ function parseOrderItemAccessories(raw?: string | null): OrderItemAccessory[] {
   }
 }
 
+function cleanVariantText(value?: string | null) {
+  const cleaned = String(value || "").trim();
+  return cleaned.length > 0 ? cleaned : null;
+}
+
+function parseOrderItemVariantJson(raw?: string | OrderItemVariant | null) {
+  if (!raw) return null;
+
+  if (typeof raw === "object") {
+    return raw;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+
+    return parsed as OrderItemVariant;
+  } catch {
+    return null;
+  }
+}
+
+function getVariantObject(item: FlexibleApiOrderItem) {
+  if (item.variant && typeof item.variant === "object") {
+    return item.variant;
+  }
+
+  if (typeof item.variant === "string") {
+    return parseOrderItemVariantJson(item.variant);
+  }
+
+  return parseOrderItemVariantJson(item.variantJson || item.variant_json);
+}
+
+function getOrderItemVariantKey(item: FlexibleApiOrderItem) {
+  const variant = getVariantObject(item);
+
+  return cleanVariantText(
+    item.variantKey ||
+      item.variant_key ||
+      item.VariantKey ||
+      variant?.key ||
+      variant?._key ||
+      variant?.id,
+  );
+}
+
+function getOrderItemSize(item: FlexibleApiOrderItem) {
+  const variant = getVariantObject(item);
+
+  return cleanVariantText(
+    item.selectedSize ||
+      item.selected_size ||
+      item.SelectedSize ||
+      item.size ||
+      item.Size ||
+      variant?.size,
+  );
+}
+
+function getOrderItemColor(item: FlexibleApiOrderItem) {
+  const variant = getVariantObject(item);
+
+  return cleanVariantText(
+    item.selectedColor ||
+      item.selected_color ||
+      item.SelectedColor ||
+      item.color ||
+      item.colour ||
+      item.Color ||
+      item.Colour ||
+      variant?.color ||
+      variant?.colour,
+  );
+}
+
+function orderItemHasVariant(item: FlexibleApiOrderItem) {
+  return Boolean(
+    getOrderItemVariantKey(item) ||
+      getOrderItemSize(item) ||
+      getOrderItemColor(item),
+  );
+}
+
+function orderHasVariants(order: FlexibleApiOrder) {
+  return Boolean(order.items?.some((item) => orderItemHasVariant(item)));
+}
+
+function OrderItemVariantBadges({ item }: { item: FlexibleApiOrderItem }) {
+  const size = getOrderItemSize(item);
+  const color = getOrderItemColor(item);
+
+  if (!orderItemHasVariant(item)) {
+    return null;
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-2 text-xs">
+      {size ? (
+        <span className="rounded-full bg-zinc-100 px-2 py-0.5 font-medium text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+          Size: {size}
+        </span>
+      ) : null}
+
+      {color ? (
+        <span className="rounded-full bg-zinc-100 px-2 py-0.5 font-medium text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+          Colour: {color}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function orderHasAccessories(order: FlexibleApiOrder) {
   return Boolean(
     order.items?.some(
@@ -127,7 +274,8 @@ export default async function OrdersPage() {
             Your Orders
           </h1>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Track purchases, delivery, and product customization details.
+            Track purchases, delivery, product variants, and customization
+            details.
           </p>
         </div>
 
@@ -148,6 +296,7 @@ export default async function OrdersPage() {
             const createdAt = getCreatedAt(order);
             const items = order.items || [];
             const hasAccessories = orderHasAccessories(order);
+            const hasVariants = orderHasVariants(order);
 
             if (!orderId) {
               return null;
@@ -175,11 +324,19 @@ export default async function OrdersPage() {
                       </span>
                     </div>
 
-                    {hasAccessories ? (
-                      <div className="mt-2 inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300">
-                        Includes customization
-                      </div>
-                    ) : null}
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {hasAccessories ? (
+                        <div className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                          Includes customization
+                        </div>
+                      ) : null}
+
+                      {hasVariants ? (
+                        <div className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                          Includes variants
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
 
                   <div className="flex flex-col gap-1 sm:items-end">
@@ -202,7 +359,7 @@ export default async function OrdersPage() {
                       No item details available for this order.
                     </div>
                   ) : (
-                    items.map((item) => {
+                    items.map((item, index) => {
                       const accessories = parseOrderItemAccessories(
                         getAccessoriesJson(item),
                       );
@@ -219,7 +376,13 @@ export default async function OrdersPage() {
                         baseLineTotal + accessoriesFee;
 
                       return (
-                        <div key={item.id} className="px-5 py-4">
+                        <div
+                          key={
+                            item.id ||
+                            `${item.productId || item.productName}-${index}`
+                          }
+                          className="px-5 py-4"
+                        >
                           <div className="flex gap-4">
                             <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900">
                               {item.imageUrl ? (
@@ -247,6 +410,8 @@ export default async function OrdersPage() {
                                   <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
                                     Qty: {item.quantity}
                                   </p>
+
+                                  <OrderItemVariantBadges item={item} />
 
                                   <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
                                     Unit price:{" "}

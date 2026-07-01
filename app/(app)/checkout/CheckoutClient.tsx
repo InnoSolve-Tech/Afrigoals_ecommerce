@@ -16,7 +16,10 @@ import {
   useTotalItems,
   useTotalPrice,
 } from "@/lib/store/cart-store-provider";
-import type { CartItem as CartItemType } from "@/lib/store/cart-store";
+import {
+  getCartItemKey,
+  type CartItem as CartItemType,
+} from "@/lib/store/cart-store";
 import { formatPrice } from "@/lib/utils";
 
 type PaymentMethod = "pesapal" | "cod";
@@ -47,6 +50,23 @@ type ProductAccessoryLinkResponse = {
     isActive?: boolean;
   };
 };
+
+function cleanVariantValue(value?: string | null) {
+  const cleaned = String(value || "").trim();
+  return cleaned.length > 0 ? cleaned : null;
+}
+
+function getSelectedSize(item: CartItemType) {
+  return cleanVariantValue(item.selectedSize);
+}
+
+function getSelectedColor(item: CartItemType) {
+  return cleanVariantValue(item.selectedColor);
+}
+
+function hasVariantSelection(item: CartItemType) {
+  return Boolean(getSelectedSize(item) || getSelectedColor(item));
+}
 
 function getAccessoryUnitPrice(accessory: CartAccessoryLike) {
   return Number(accessory.unitPrice ?? accessory.price ?? 0);
@@ -586,7 +606,7 @@ export function CheckoutClient() {
                 </div>
               ) : null}
 
-              {(isLoading || isLoadingAccessories) ? (
+              {isLoading || isLoadingAccessories ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
                   <span className="ml-2 text-sm text-zinc-500">
@@ -599,9 +619,13 @@ export function CheckoutClient() {
 
               <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
                 {items.map((item) => {
-                  const stockInfo = stockMap.get(item.productId);
+                  const cartItemKey = getCartItemKey(item);
+                  const stockInfo = stockMap.get(cartItemKey);
                   const hasIssue =
                     stockInfo?.isOutOfStock || stockInfo?.exceedsStock;
+
+                  const selectedSize = getSelectedSize(item);
+                  const selectedColor = getSelectedColor(item);
 
                   const itemBaseTotal = item.price * item.quantity;
                   const itemAccessoriesTotal = getItemAccessoriesTotal(item);
@@ -609,7 +633,7 @@ export function CheckoutClient() {
 
                   return (
                     <div
-                      key={item.productId}
+                      key={cartItemKey}
                       className={`flex gap-4 px-6 py-4 ${
                         hasIssue ? "bg-red-50 dark:bg-red-950/20" : ""
                       }`}
@@ -639,6 +663,22 @@ export function CheckoutClient() {
                           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
                             Qty: {item.quantity}
                           </p>
+
+                          {hasVariantSelection(item) ? (
+                            <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                              {selectedSize ? (
+                                <span className="rounded-full bg-zinc-100 px-2 py-0.5 font-medium text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+                                  Size: {selectedSize}
+                                </span>
+                              ) : null}
+
+                              {selectedColor ? (
+                                <span className="rounded-full bg-zinc-100 px-2 py-0.5 font-medium text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+                                  Colour: {selectedColor}
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : null}
 
                           {item.accessories?.length ? (
                             <div className="mt-2 rounded-md border border-zinc-200 bg-zinc-50 p-2 text-xs dark:border-zinc-800 dark:bg-zinc-900">

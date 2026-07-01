@@ -6,11 +6,20 @@ import type { CartItemAccessory } from "@/lib/api/types";
 
 type CartItem = {
   productId: string;
+  slug?: string;
   name: string;
   price: number;
   quantity: number;
   image?: string;
   accessories?: CartItemAccessory[];
+
+  /**
+   * Variant fields from cart-store.
+   * These are required so COD orders keep size/colour selections.
+   */
+  variantKey?: string | null;
+  selectedSize?: string | null;
+  selectedColor?: string | null;
 };
 
 type DeliveryDetails = {
@@ -47,19 +56,22 @@ function getApiBaseUrl() {
     process.env.NEXT_PUBLIC_API_URL ||
     "http://localhost:8080";
 
-  const cleaned = raw.replace(/\/+$/, "");
-
-  if (cleaned.endsWith("")) {
-    return cleaned;
-  }
-
-  return `${cleaned}`;
+  return raw.replace(/\/+$/, "");
 }
 
 function cleanPhone(value: string | undefined): string {
   return String(value || "")
     .trim()
     .replace(/\s+/g, "");
+}
+
+function cleanText(value?: string | null): string {
+  return String(value || "").trim();
+}
+
+function nullableText(value?: string | null): string | null {
+  const cleaned = cleanText(value);
+  return cleaned.length > 0 ? cleaned : null;
 }
 
 function isValidPhone(value: string): boolean {
@@ -78,7 +90,9 @@ function isValidCoordinate(lat: number, lng: number): boolean {
 }
 
 function cleanAccessories(accessories: CartItemAccessory[] | undefined) {
-  if (!Array.isArray(accessories)) return [];
+  if (!Array.isArray(accessories)) {
+    return [];
+  }
 
   return accessories
     .map((accessory) => ({
@@ -92,6 +106,75 @@ function cleanAccessories(accessories: CartItemAccessory[] | undefined) {
       notes: String(accessory.notes || "").trim(),
     }))
     .filter((accessory) => accessory.accessoryId);
+}
+
+function validateCartItems(items: CartItem[]): string | null {
+  if (!Array.isArray(items) || items.length === 0) {
+    return "Your cart is empty.";
+  }
+
+  for (const item of items) {
+    if (!item.productId?.trim()) {
+      return "Invalid cart item.";
+    }
+
+    if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
+      return "Invalid cart quantity.";
+    }
+
+    const accessories = cleanAccessories(item.accessories);
+
+    for (const accessory of accessories) {
+      if (!accessory.accessoryId) {
+        return "Invalid accessory selected.";
+      }
+
+      if (!Number.isInteger(accessory.quantity) || accessory.quantity <= 0) {
+        return "Invalid accessory quantity.";
+      }
+    }
+  }
+
+  return null;
+}
+
+function buildOrderItem(item: CartItem) {
+  const variantKey = nullableText(item.variantKey);
+  const selectedSize = nullableText(item.selectedSize);
+  const selectedColor = nullableText(item.selectedColor);
+
+  return {
+    productId: item.productId.trim(),
+    slug: nullableText(item.slug),
+    name: cleanText(item.name),
+    quantity: item.quantity,
+    price: Number(item.price || 0),
+
+    /**
+     * Main variant fields.
+     * Your Go backend should save these on each order item.
+     */
+    variantKey,
+    selectedSize,
+    selectedColor,
+
+    /**
+     * Compatibility aliases.
+     * These help if your Go backend expects size/color instead of selectedSize/selectedColor.
+     */
+    size: selectedSize,
+    color: selectedColor,
+    colour: selectedColor,
+
+    variant: {
+      key: variantKey,
+      size: selectedSize,
+      color: selectedColor,
+      colour: selectedColor,
+    },
+
+    accessories: cleanAccessories(item.accessories),
+  };
 }
 
 export async function createCashOnDeliveryOrder(
@@ -109,27 +192,13 @@ export async function createCashOnDeliveryOrder(
       };
     }
 
-    if (!Array.isArray(items) || items.length === 0) {
+    const cartError = validateCartItems(items);
+
+    if (cartError) {
       return {
         success: false,
-        error: "Your cart is empty.",
+        error: cartError,
       };
-    }
-
-    for (const item of items) {
-      if (!item.productId?.trim()) {
-        return {
-          success: false,
-          error: "Invalid cart item.",
-        };
-      }
-
-      if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
-        return {
-          success: false,
-          error: "Invalid cart quantity.",
-        };
-      }
     }
 
     const address = delivery.address?.trim() || "";
@@ -197,11 +266,7 @@ export async function createCashOnDeliveryOrder(
     const apiBaseUrl = getApiBaseUrl();
 
     const payload = {
-      items: items.map((item) => ({
-        productId: item.productId.trim(),
-        quantity: item.quantity,
-        accessories: cleanAccessories(item.accessories),
-      })),
+      items: items.map(buildOrderItem),
 
       deliveryAddress: address,
       deliveryLat: delivery.lat,
@@ -216,6 +281,8 @@ export async function createCashOnDeliveryOrder(
 
       paymentMethod: "cod",
     };
+
+    console.log("COD ORDER PAYLOAD", JSON.stringify(payload, null, 2));
 
     const res = await fetch(`${apiBaseUrl}/orders`, {
       method: "POST",
