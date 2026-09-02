@@ -191,6 +191,11 @@ export function CheckoutButton({
           });
 
           if (!result.success) {
+            if (result.url) {
+              window.location.href = result.url;
+              return;
+            }
+
             const message =
               result.error ||
               "Cash on delivery order could not be created. Please try again.";
@@ -229,6 +234,11 @@ export function CheckoutButton({
         });
 
         if (!result.success) {
+          if (result.url) {
+            window.location.href = result.url;
+            return;
+          }
+
           const message =
             result.error || "Payment initialization failed. Please try again.";
 

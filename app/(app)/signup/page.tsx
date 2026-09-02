@@ -1,9 +1,9 @@
 "use client";
 
-import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { GoogleLogin } from "@react-oauth/google";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -61,6 +61,16 @@ function SignUpInner() {
     router.refresh();
   }
 
+  function redirectToSigninAfterVerification() {
+    const params = new URLSearchParams({
+      next,
+      verified: "1",
+    });
+
+    router.replace(`/signin?${params.toString()}`);
+    router.refresh();
+  }
+
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
@@ -101,7 +111,9 @@ function SignUpInner() {
         }),
       });
 
-      const data = (await res.json().catch(() => ({}))) as RegisterStartResponse;
+      const data = (await res
+        .json()
+        .catch(() => ({}))) as RegisterStartResponse;
 
       if (!res.ok) {
         setError(data.error || "Failed to create account");
@@ -166,7 +178,7 @@ function SignUpInner() {
 
       setCode("");
       setChallengeId("");
-      completeAuth(data.user);
+      redirectToSigninAfterVerification();
     } catch {
       setError("Email verification failed. Check that the server is running.");
     } finally {

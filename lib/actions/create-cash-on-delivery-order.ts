@@ -188,6 +188,7 @@ export async function createCashOnDeliveryOrder(
     if (!token) {
       return {
         success: false,
+        url: "/signin?next=/checkout",
         error: "Please sign in to place an order.",
       };
     }

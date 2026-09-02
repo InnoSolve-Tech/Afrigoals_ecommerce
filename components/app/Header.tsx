@@ -3,7 +3,7 @@
 import { Menu, Package, Search, ShoppingCart, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { BrandLogo } from "@/components/app/BrandLogo";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useAuthState } from "@/lib/auth/client";
 import { useTotalItems } from "@/lib/store/cart-store-provider";
 import { useChatActions, useIsChatOpen } from "@/lib/store/chat-store-provider";
 
@@ -24,68 +25,23 @@ const navLinks = [
   { label: "Accessories", href: "/products?category=accessories" },
 ];
 
-type AuthUser = {
-  id: string;
-  email: string;
-  name?: string;
-  role?: string;
-};
-
 export function Header() {
   const router = useRouter();
   const { openChat } = useChatActions();
   const isChatOpen = useIsChatOpen();
   const totalItems = useTotalItems();
+  const { user, isSignedIn, signOut } = useAuthState();
 
-  const [user, setUser] = useState<AuthUser | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const isSignedIn = !!user;
-
-  function loadUser() {
-    try {
-      const rawUser = localStorage.getItem("auth_user");
-
-      if (!rawUser) {
-        setUser(null);
-        return;
-      }
-
-      const parsedUser = JSON.parse(rawUser) as AuthUser;
-
-      if (!parsedUser?.email) {
-        setUser(null);
-        return;
-      }
-
-      setUser(parsedUser);
-    } catch {
-      setUser(null);
-    }
-  }
-
-  function signOut() {
-    document.cookie = "auth_token=; path=/; max-age=0; samesite=lax";
+  async function handleSignOut() {
+    await signOut();
     localStorage.removeItem("auth_user");
-    setUser(null);
     setMobileMenuOpen(false);
-    window.dispatchEvent(new Event("auth-changed"));
     router.push("/");
     router.refresh();
   }
-
-  useEffect(() => {
-    loadUser();
-
-    window.addEventListener("auth-changed", loadUser);
-    window.addEventListener("storage", loadUser);
-
-    return () => {
-      window.removeEventListener("auth-changed", loadUser);
-      window.removeEventListener("storage", loadUser);
-    };
-  }, []);
 
   const handleSearch = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -197,7 +153,7 @@ export function Header() {
 
                   <DropdownMenuItem
                     className="cursor-pointer text-red-600 focus:text-red-600"
-                    onClick={signOut}
+                    onClick={handleSignOut}
                   >
                     Logout
                   </DropdownMenuItem>
@@ -290,7 +246,7 @@ export function Header() {
                 <button
                   type="button"
                   className="block w-full py-2 text-left text-sm font-medium text-red-600 transition hover:text-red-700"
-                  onClick={signOut}
+                  onClick={handleSignOut}
                 >
                   Logout
                 </button>
