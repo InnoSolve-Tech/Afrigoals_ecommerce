@@ -5,6 +5,8 @@ import type { NextConfig } from "next";
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
+  // Self-contained server bundle used by the Docker image (see Dockerfile).
+  output: "standalone",
   reactCompiler: true,
   turbopack: {
     root: rootDir,

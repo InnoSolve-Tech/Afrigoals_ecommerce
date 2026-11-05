@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
+import { AUTH_COOKIE_NAME } from "@/lib/auth/constants";
 
 const API_BASE_URL = (
   process.env.AFRIGOALS_API_URL || "http://localhost:8080/api/v1"
 ).replace(/\/$/, "");
-
-const AUTH_COOKIE_NAME = "afrigoals_token";
 
 export async function POST(req: Request) {
   try {
@@ -14,7 +13,7 @@ export async function POST(req: Request) {
     if (!credential) {
       return NextResponse.json(
         { error: "google credential is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -33,14 +32,14 @@ export async function POST(req: Request) {
     if (!backendRes.ok) {
       return NextResponse.json(
         { error: data?.error || "Google sign in failed" },
-        { status: backendRes.status }
+        { status: backendRes.status },
       );
     }
 
     if (!data?.token) {
       return NextResponse.json(
         { error: "backend did not return auth token" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -63,7 +62,7 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json(
       { error: "Google sign in failed" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

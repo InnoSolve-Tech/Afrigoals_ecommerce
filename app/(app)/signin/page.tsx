@@ -1,16 +1,11 @@
 "use client";
 
-import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { GoogleLogin } from "@react-oauth/google";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AUTH_COOKIE_NAME } from "@/lib/auth/constants";
-
-const API_URL = (
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1"
-).replace(/\/$/, "");
 
 type AuthUser = {
   id: string;
@@ -23,6 +18,7 @@ type AuthUser = {
 type AuthResponse = {
   token?: string;
   user?: AuthUser;
+  ok?: boolean;
   error?: string;
 };
 
@@ -44,6 +40,8 @@ function SignInInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = safeNext(searchParams.get("next"));
+  const verified = searchParams.get("verified") === "1";
+  const reset = searchParams.get("reset") === "1";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -56,37 +54,17 @@ function SignInInner() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
-  function clearOldAuthCookies() {
-    document.cookie = `auth_token=; path=/; max-age=0; samesite=lax`;
-    document.cookie = `${AUTH_COOKIE_NAME}=; path=/; max-age=0; samesite=lax`;
-  }
-
-  function saveClientSession(token: string, user?: AuthUser | null) {
-    clearOldAuthCookies();
-
-    document.cookie = `${AUTH_COOKIE_NAME}=${token}; path=/; max-age=${
-      60 * 60 * 24 * 7
-    }; samesite=lax`;
-
-    if (user) {
-      localStorage.setItem("auth_user", JSON.stringify(user));
-    }
-
+  function notifyAuthChange() {
     window.dispatchEvent(new Event("auth-changed"));
   }
 
   function completeAuth(data: AuthResponse) {
-    if (!data.token) {
-      setError("Authentication token missing from server response");
-      return;
-    }
-
     if (!data.user) {
       setError("User details missing from server response");
       return;
     }
 
-    saveClientSession(data.token, data.user);
+    notifyAuthChange();
 
     if (data.user.role === "admin") {
       router.replace("/admin");
@@ -118,7 +96,7 @@ function SignInInner() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_URL}/auth/login`, {
+      const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -131,14 +109,21 @@ function SignInInner() {
         }),
       });
 
-      const data = (await res.json().catch(() => ({}))) as LoginStartResponse;
+      const data = (await res.json().catch(() => ({}))) as
+        | LoginStartResponse
+        | AuthResponse;
 
       if (!res.ok) {
         setError(data.error || "Failed to sign in");
         return;
       }
 
-      if (!data.requires2fa || !data.challengeId) {
+      if ("token" in data && data.token) {
+        completeAuth(data);
+        return;
+      }
+
+      if (!("requires2fa" in data) || !data.requires2fa || !data.challengeId) {
         setError("Invalid server response");
         return;
       }
@@ -174,7 +159,7 @@ function SignInInner() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_URL}/auth/login/verify`, {
+      const res = await fetch("/api/auth/login/verify", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -212,7 +197,7 @@ function SignInInner() {
     setGoogleLoading(true);
 
     try {
-      const res = await fetch(`${API_URL}/auth/google`, {
+      const res = await fetch("/api/auth/google", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -247,6 +232,18 @@ function SignInInner() {
       <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
         Sign in using Google or your email and password.
       </p>
+
+      {verified ? (
+        <p className="mt-4 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+          Account verified. Sign in to continue.
+        </p>
+      ) : null}
+
+      {reset ? (
+        <p className="mt-4 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+          Password reset successful. Sign in with your new password.
+        </p>
+      ) : null}
 
       {!challengeId ? (
         <>
@@ -313,6 +310,15 @@ function SignInInner() {
             >
               {loading ? "Checking..." : "Continue"}
             </Button>
+
+            <div className="text-right">
+              <Link
+                className="text-sm font-medium underline"
+                href={`/forgot-password?next=${encodeURIComponent(next)}`}
+              >
+                Forgot password?
+              </Link>
+            </div>
           </form>
         </>
       ) : (

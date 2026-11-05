@@ -8,6 +8,8 @@ type DeliveryMapPickerProps = {
   initialCenter?: { lat: number; lng: number };
 };
 
+const DEFAULT_CENTER = { lat: 0.3476, lng: 32.5825 };
+
 type SelectedLocation = {
   address: string;
   lat: number;
@@ -21,7 +23,7 @@ type LatLngLiteral = {
 
 export function DeliveryMapPicker({
   onSelect,
-  initialCenter = { lat: 0.3476, lng: 32.5825 },
+  initialCenter = DEFAULT_CENTER,
 }: DeliveryMapPickerProps) {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -34,6 +36,7 @@ export function DeliveryMapPicker({
   const [searchValue, setSearchValue] = useState("");
   const [selectedLocation, setSelectedLocation] =
     useState<SelectedLocation | null>(null);
+  const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [isResolving, setIsResolving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -110,6 +113,59 @@ export function DeliveryMapPicker({
     }
   }
 
+  async function geocodeSearchValue() {
+    const query = searchValue.trim();
+
+    if (!query) {
+      setError("Enter a delivery location to search.");
+      return;
+    }
+
+    if (!geocoderRef.current) {
+      setError("Map search is not ready yet. Please try again.");
+      return;
+    }
+
+    setIsResolving(true);
+    setError(null);
+
+    try {
+      const response = await geocoderRef.current.geocode({
+        address: query,
+        componentRestrictions: {
+          country: "UG",
+        },
+      });
+
+      const result = response.results?.[0];
+      const location = result?.geometry?.location;
+
+      if (!location) {
+        setError("No matching delivery location was found.");
+        return;
+      }
+
+      const lat = Number(location.lat());
+      const lng = Number(location.lng());
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        setError("Selected place returned invalid coordinates.");
+        return;
+      }
+
+      selectLocation({
+        address: result.formatted_address || query,
+        lat,
+        lng,
+      });
+    } catch (err) {
+      console.error("Delivery location search failed:", err);
+      setError("Failed to search this location. Try a nearby landmark.");
+    } finally {
+      setIsResolving(false);
+    }
+  }
+
  function handleAutocompleteSelection() {
   const autocomplete = autocompleteRef.current;
 
@@ -162,11 +218,13 @@ export function DeliveryMapPicker({
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
 
+    // Only signals that the Maps bootstrap script is present; the picker is
+    // marked ready (isReady) once the geocoder and autocomplete are attached.
     function waitForGoogleMaps() {
       const googleMaps = getGoogleMaps();
 
       if (googleMaps) {
-        setIsReady(true);
+        setIsGoogleLoaded(true);
         return;
       }
 
@@ -175,7 +233,7 @@ export function DeliveryMapPicker({
 
     waitForGoogleMaps();
 
-    const handler = () => setIsReady(true);
+    const handler = () => setIsGoogleLoaded(true);
     window.addEventListener("google-maps-ready", handler);
 
     return () => {
@@ -188,7 +246,7 @@ export function DeliveryMapPicker({
   }, []);
 
   useEffect(() => {
-    if (!isReady || !mapRef.current || !inputRef.current) {
+    if (!isGoogleLoaded || !mapRef.current || !inputRef.current) {
       return;
     }
 
@@ -207,15 +265,25 @@ export function DeliveryMapPicker({
         let AdvancedMarkerElement = googleMaps.marker?.AdvancedMarkerElement;
         let AutocompleteClass = googleMaps.places?.Autocomplete;
 
+        // With the dynamic loader, classes such as Geocoder only exist on
+        // google.maps after their library is imported, so import them all
+        // here before constructing anything.
         if (typeof googleMaps.importLibrary === "function") {
           const mapsLibrary = await googleMaps.importLibrary("maps");
           const markerLibrary = await googleMaps.importLibrary("marker");
           const placesLibrary = await googleMaps.importLibrary("places");
+          const geocodingLibrary = await googleMaps.importLibrary("geocoding");
 
           MapClass = mapsLibrary.Map || MapClass;
           AdvancedMarkerElement =
             markerLibrary.AdvancedMarkerElement || AdvancedMarkerElement;
           AutocompleteClass = placesLibrary.Autocomplete || AutocompleteClass;
+          GeocoderClass = geocodingLibrary.Geocoder || GeocoderClass;
+        }
+
+        if (!GeocoderClass) {
+          setError("Google Geocoder is not loaded. Please refresh the page.");
+          return;
         }
 
         if (cancelled || !mapRef.current || !inputRef.current) {
@@ -310,6 +378,12 @@ export function DeliveryMapPicker({
 
           await handleMapPoint({ lat, lng });
         });
+
+        // Search and autocomplete are only enabled once everything is attached,
+        // so the first search no longer hits a half-initialised picker.
+        if (!cancelled) {
+          setIsReady(true);
+        }
       } catch (err) {
         console.error("Failed to initialize delivery map:", err);
         setError("Failed to initialize map autocomplete.");
@@ -321,7 +395,7 @@ export function DeliveryMapPicker({
     return () => {
       cancelled = true;
     };
-  }, [isReady, initialCenter]);
+  }, [isGoogleLoaded, initialCenter]);
 
   return (
     <div className="space-y-3">
@@ -339,6 +413,12 @@ export function DeliveryMapPicker({
             setSelectedLocation(null);
             setError(null);
           }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              geocodeSearchValue();
+            }
+          }}
           placeholder="Start typing an address, area, or landmark"
           autoComplete="off"
           className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
@@ -350,6 +430,15 @@ export function DeliveryMapPicker({
         style={{ height: "380px", width: "100%" }}
         className="overflow-hidden rounded-xl border"
       />
+
+      <button
+        type="button"
+        onClick={geocodeSearchValue}
+        disabled={!isReady || isResolving || !searchValue.trim()}
+        className="w-full rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+      >
+        {isResolving ? "Searching..." : "Search location"}
+      </button>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-muted-foreground">

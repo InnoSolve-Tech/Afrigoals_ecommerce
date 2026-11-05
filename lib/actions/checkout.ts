@@ -173,6 +173,7 @@ export async function createCheckoutSession(
     if (!token) {
       return {
         success: false,
+        url: "/signin?next=/checkout",
         error: "Please sign in before checkout.",
       };
     }

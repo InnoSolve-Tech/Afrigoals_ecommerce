@@ -1,6 +1,10 @@
 // app/api/auth/login/verify/route.ts
 import { NextResponse } from "next/server";
-import { AUTH_COOKIE_NAME } from "@/lib/auth/constants";
+import {
+  AUTH_COOKIE_NAME,
+  TRUSTED_DEVICE_COOKIE_NAME,
+  TRUSTED_DEVICE_MAX_AGE_SECONDS,
+} from "@/lib/auth/constants";
 
 const apiBaseUrl = (
   process.env.AFRIGOALS_API_URL ||
@@ -63,6 +67,19 @@ export async function POST(req: Request) {
     path: "/",
     maxAge: 60 * 60 * 24,
   });
+
+  // Remember this browser so the admin does not get the code on every login.
+  const trustedDeviceToken = (data as any)?.trustedDeviceToken;
+
+  if (trustedDeviceToken) {
+    response.cookies.set(TRUSTED_DEVICE_COOKIE_NAME, trustedDeviceToken, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: TRUSTED_DEVICE_MAX_AGE_SECONDS,
+    });
+  }
 
   return response;
 }

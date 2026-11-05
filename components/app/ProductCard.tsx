@@ -1,12 +1,12 @@
 "use client";
 
-import { Star } from "lucide-react";
+import { ShoppingBag, Star } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
-import { AddToCartButton } from "@/components/app/AddToCartButton";
-import { cn, formatPrice } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import type { CatalogProduct } from "@/lib/catalog/types";
+import { cn, formatPrice } from "@/lib/utils";
 
 interface ProductCardProps {
   product: CatalogProduct;
@@ -178,14 +178,25 @@ export function ProductCard({ product }: ProductCardProps) {
       </div>
 
       <div className="mt-auto p-4 pt-0">
-        <AddToCartButton
-          productId={product._id}
-          slug={product.slug ?? undefined}
-          name={product.name ?? "Unknown Product"}
-          price={product.price ?? 0}
-          image={mainImageUrl ?? undefined}
-          stock={stock}
-        />
+        {isOutOfStock ? (
+          <Button
+            disabled
+            variant="secondary"
+            className="h-11 w-full rounded-lg font-semibold"
+          >
+            Out of Stock
+          </Button>
+        ) : (
+          <Button
+            asChild
+            className="h-11 w-full rounded-lg bg-primary font-semibold text-primary-foreground hover:bg-primary/90"
+          >
+            <Link href={href}>
+              <ShoppingBag className="mr-2 h-4 w-4" />
+              Choose options
+            </Link>
+          </Button>
+        )}
       </div>
     </article>
   );

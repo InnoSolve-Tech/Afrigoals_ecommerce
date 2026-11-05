@@ -1,5 +1,10 @@
 // app/api/auth/login/route.ts
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import {
+  AUTH_COOKIE_NAME,
+  TRUSTED_DEVICE_COOKIE_NAME,
+} from "@/lib/auth/constants";
 
 const apiBaseUrl = (
   process.env.AFRIGOALS_API_URL ||
@@ -25,11 +30,14 @@ export async function POST(req: Request) {
     );
   }
 
+  const trustedDevice = (await cookies()).get(TRUSTED_DEVICE_COOKIE_NAME)?.value;
+
   const res = await fetch(`${apiBaseUrl}/auth/login`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
+      ...(trustedDevice ? { "X-Trusted-Device": trustedDevice } : {}),
     },
     body: JSON.stringify({ email, password }),
     cache: "no-store",
@@ -42,6 +50,23 @@ export async function POST(req: Request) {
       { error: (data as any)?.error || "Failed to sign in" },
       { status: res.status },
     );
+  }
+
+  if ((data as any)?.token && (data as any)?.user) {
+    const response = NextResponse.json({
+      token: (data as any).token,
+      user: (data as any).user,
+    });
+
+    response.cookies.set(AUTH_COOKIE_NAME, (data as any).token, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+
+    return response;
   }
 
   return NextResponse.json({

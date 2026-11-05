@@ -1,11 +1,11 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { AUTH_COOKIE_NAME } from "@/lib/auth/constants";
-import { cookies } from "next/headers";
 
 const apiBaseUrl = (
   process.env.AFRIGOALS_API_URL ||
   process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:8080"
+  "http://localhost:8080/api/v1"
 ).replace(/\/+$/, "");
 
 export async function GET(req: Request) {

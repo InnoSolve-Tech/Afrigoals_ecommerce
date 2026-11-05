@@ -1,17 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import {
+  CreditCard,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  Package,
+  ReceiptText,
+  ShoppingCart,
+  X,
+} from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { LayoutDashboard, Menu, Package, ShoppingCart, X } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 import { BrandLogo } from "@/components/app/BrandLogo";
 import { Button } from "@/components/ui/button";
+import { useAuthState } from "@/lib/auth/client";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
   { label: "Inventory", href: "/admin/inventory", icon: Package },
   { label: "Orders", href: "/admin/orders", icon: ShoppingCart },
+  { label: "Reconciliation", href: "/admin/reconciliation", icon: ReceiptText },
+  { label: "Payments", href: "/admin/payments", icon: CreditCard },
 ];
 
 export default function AdminLayout({
@@ -20,7 +32,22 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { signOut } = useAuthState();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  async function handleSignOut() {
+    setIsSigningOut(true);
+
+    try {
+      await signOut();
+      router.replace("/admin/signin");
+      router.refresh();
+    } finally {
+      setIsSigningOut(false);
+    }
+  }
 
   return (
     <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950">
@@ -101,6 +128,19 @@ export default function AdminLayout({
           </nav>
 
           <div className="space-y-3 border-t border-zinc-200 px-3 py-4 dark:border-zinc-800">
+            {pathname !== "/admin/signin" ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full justify-start gap-3 px-3 text-sm font-medium text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/50 dark:hover:text-zinc-100"
+                onClick={handleSignOut}
+                disabled={isSigningOut}
+              >
+                <LogOut className="h-5 w-5" />
+                {isSigningOut ? "Signing out..." : "Logout"}
+              </Button>
+            ) : null}
+
             <Link
               href="/"
               onClick={() => setSidebarOpen(false)}

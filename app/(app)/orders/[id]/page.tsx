@@ -756,6 +756,19 @@ export default async function OrderDetailPage({
 
       <PaymentBanner payment={payment} />
 
+      {normalizePaymentStatus(order.paymentMethod) === "mobile_money" &&
+      normalizePaymentStatus(order.paymentStatus) !== "paid" ? (
+        <div className="mb-6 flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+          <span>This order is waiting for your mobile money payment.</span>
+          <Link
+            href={`/orders/${encodeURIComponent(id)}/pay`}
+            className="font-semibold underline"
+          >
+            Complete payment
+          </Link>
+        </div>
+      ) : null}
+
       <div className="space-y-6">
         <PaymentStatusBadge
           paymentStatus={paymentStatus}
