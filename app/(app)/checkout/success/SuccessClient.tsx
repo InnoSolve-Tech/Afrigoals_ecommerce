@@ -5,6 +5,7 @@ import { ArrowRight, Banknote, CheckCircle, Package } from "lucide-react";
 import Link from "next/link";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { clearCheckoutDraft } from "@/lib/checkout/draft";
 import { useCartActions } from "@/lib/store/cart-store-provider";
 
 interface SuccessClientProps {
@@ -22,9 +23,11 @@ export function SuccessClient({
 
   useEffect(() => {
     clearCart();
+    clearCheckoutDraft();
   }, [clearCart]);
 
   const isCod = paymentMethod === "cod";
+  const isMobileMoney = paymentMethod === "mobile_money";
   const displayOrder = orderNumber ?? sessionId ?? "—";
 
   return (
@@ -76,7 +79,7 @@ export function SuccessClient({
                 <>
                   <Package className="h-4 w-4 text-zinc-400" />
                   <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                    Pesapal
+                    {isMobileMoney ? "Mobile Money (MTN / Airtel)" : "Pesapal"}
                   </span>
                 </>
               )}

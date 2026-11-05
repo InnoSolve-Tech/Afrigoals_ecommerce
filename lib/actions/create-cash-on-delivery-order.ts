@@ -180,6 +180,7 @@ function buildOrderItem(item: CartItem) {
 export async function createCashOnDeliveryOrder(
   items: CartItem[],
   delivery: DeliveryDetails,
+  paymentMethod: "cod" | "mobile_money" = "cod",
 ): Promise<CreateCodOrderResult> {
   try {
     const cookieStore = await cookies();
@@ -280,7 +281,7 @@ export async function createCashOnDeliveryOrder(
       deliveryAltPhone: altPhone,
       deliveryNote: note,
 
-      paymentMethod: "cod",
+      paymentMethod,
     };
 
     console.log("COD ORDER PAYLOAD", JSON.stringify(payload, null, 2));
@@ -310,6 +311,15 @@ export async function createCashOnDeliveryOrder(
 
     const orderId = data.id || data.ID;
     const orderNumber = data.orderNumber || data.order_number;
+
+    if (paymentMethod === "mobile_money") {
+      return {
+        success: true,
+        url: orderId
+          ? `/orders/${encodeURIComponent(orderId)}/pay`
+          : "/orders",
+      };
+    }
 
     return {
       success: true,

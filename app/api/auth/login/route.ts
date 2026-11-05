@@ -1,6 +1,10 @@
 // app/api/auth/login/route.ts
 import { NextResponse } from "next/server";
-import { AUTH_COOKIE_NAME } from "@/lib/auth/constants";
+import { cookies } from "next/headers";
+import {
+  AUTH_COOKIE_NAME,
+  TRUSTED_DEVICE_COOKIE_NAME,
+} from "@/lib/auth/constants";
 
 const apiBaseUrl = (
   process.env.AFRIGOALS_API_URL ||
@@ -26,11 +30,14 @@ export async function POST(req: Request) {
     );
   }
 
+  const trustedDevice = (await cookies()).get(TRUSTED_DEVICE_COOKIE_NAME)?.value;
+
   const res = await fetch(`${apiBaseUrl}/auth/login`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
+      ...(trustedDevice ? { "X-Trusted-Device": trustedDevice } : {}),
     },
     body: JSON.stringify({ email, password }),
     cache: "no-store",

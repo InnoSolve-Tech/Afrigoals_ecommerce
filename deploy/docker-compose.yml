@@ -1,0 +1,57 @@
+# Afrigoals production stack for a Contabo VPS.
+#
+# Run from this folder with the API repo checked out next to the storefront:
+#   ../Afrigoals_ecommerce        (this repo)
+#   ../Afrigoals_ecommerce_api    (Go API)
+#
+# Secrets go in deploy/.env (never commit it). See DEPLOY.md.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: afrigoals
+      POSTGRES_USER: afrigoals
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U afrigoals -d afrigoals"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ../../Afrigoals_ecommerce_api
+    restart: unless-stopped
+    env_file: ./api.env
+    environment:
+      PORT: "8080"
+      DB_DRIVER: postgres
+      DB_POSTGRES_DSN: postgres://afrigoals:${POSTGRES_PASSWORD}@db:5432/afrigoals?sslmode=disable
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "8080"
+
+  web:
+    build:
+      context: ..
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://yourdomain.com/api/v1}
+        NEXT_PUBLIC_GOOGLE_MAPS_API: ${NEXT_PUBLIC_GOOGLE_MAPS_API:-}
+        NEXT_PUBLIC_GOOGLE_MAP_ID: ${NEXT_PUBLIC_GOOGLE_MAP_ID:-}
+    restart: unless-stopped
+    env_file: ./web.env
+    environment:
+      AFRIGOALS_API_URL: http://api:8080/api/v1
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:3000:3000"
+
+volumes:
+  pgdata:

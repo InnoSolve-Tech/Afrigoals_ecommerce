@@ -6,18 +6,25 @@ function normalizeStatus(status?: string) {
   return String(status || "").trim().toLowerCase();
 }
 
-function isPaidOrder(order: ApiOrder) {
+function isCancelled(order: ApiOrder) {
   const status = normalizeStatus(order.status);
-  const paymentStatus = normalizeStatus((order as any).paymentStatus);
-  return (
-    paymentStatus === "paid" ||
-    status === "paid" ||
-    status === "confirmed" ||
-    status === "packed" ||
-    status === "shipped" ||
-    status === "out_for_delivery" ||
-    status === "delivered"
-  );
+  return status === "cancelled" || status === "canceled";
+}
+
+/**
+ * An order counts as revenue once its payment is collected. Payment status is
+ * the source of truth: Pesapal sets "paid" on success, and an admin sets it when
+ * cash is collected for cash-on-delivery orders. Order status is not used,
+ * because a "confirmed" COD order has not been paid yet.
+ */
+function isRecognisedRevenue(order: ApiOrder) {
+  if (isCancelled(order)) return false;
+  return normalizeStatus((order as any).paymentStatus) === "paid";
+}
+
+function lineRevenue(item: NonNullable<ApiOrder["items"]>[number]) {
+  if (typeof item.lineSubtotal === "number") return item.lineSubtotal;
+  return Number(item.priceAtPurchase || 0) * Number(item.quantity || 0);
 }
 
 export async function GET() {
@@ -32,68 +39,99 @@ export async function GET() {
   }
 
   const orders = Array.isArray(body) ? (body as ApiOrder[]) : [];
-  const paidOrders = orders.filter(isPaidOrder);
-  const pendingOrders = orders.filter((order) =>
-    ["pending", "pending_payment"].includes(normalizeStatus(order.status)),
-  );
-  const deliveredOrders = orders.filter(
-    (order) => normalizeStatus(order.status) === "delivered",
-  );
+  const liveOrders = orders.filter((order) => !isCancelled(order));
+  const paidOrders = orders.filter(isRecognisedRevenue);
 
+  // Revenue is split so the figures reconcile: product sales + delivery fees
+  // = order totals for paid orders.
+  const productRevenue = paidOrders.reduce(
+    (sum, order) => sum + Number(order.subtotal || 0),
+    0,
+  );
+  const deliveryFees = paidOrders.reduce(
+    (sum, order) => sum + Number(order.deliveryFee || 0),
+    0,
+  );
   const revenue = paidOrders.reduce(
     (sum, order) => sum + Number(order.total || 0),
     0,
   );
-  const deliveryFees = orders.reduce(
-    (sum, order) => sum + Number(order.deliveryFee || 0),
-    0,
-  );
-  const averageOrderValue = paidOrders.length > 0 ? revenue / paidOrders.length : 0;
+  const outstandingCod = liveOrders
+    .filter(
+      (order) =>
+        !isRecognisedRevenue(order) &&
+        normalizeStatus(order.paymentMethod) === "cod",
+    )
+    .reduce((sum, order) => sum + Number(order.total || 0), 0);
 
-  const productSales = new Map<
-    string,
-    { productId: string; name: string; units: number; revenue: number }
-  >();
+  const averageOrderValue =
+    paidOrders.length > 0 ? revenue / paidOrders.length : 0;
+
+  type ProductSales = {
+    productId: string;
+    name: string;
+    units: number;
+    orders: number;
+    revenue: number;
+  };
+
+  const productSales = new Map<string, ProductSales>();
 
   for (const order of paidOrders) {
+    const seenInOrder = new Set<string>();
+
     for (const item of order.items || []) {
       const productId = item.productId || "unknown";
-      const current =
-        productSales.get(productId) ||
-        {
-          productId,
-          name: item.productName || "Unknown product",
-          units: 0,
-          revenue: 0,
-        };
+      const current: ProductSales = productSales.get(productId) || {
+        productId,
+        name: item.productName || "Unknown product",
+        units: 0,
+        orders: 0,
+        revenue: 0,
+      };
 
       current.units += Number(item.quantity || 0);
-      current.revenue += Number(
-        item.lineSubtotal ?? item.total ?? item.priceAtPurchase * item.quantity,
-      );
+      current.revenue += lineRevenue(item);
+
+      if (!seenInOrder.has(productId)) {
+        current.orders += 1;
+        seenInOrder.add(productId);
+      }
+
       productSales.set(productId, current);
     }
   }
+
+  const statusCounts = orders.reduce<Record<string, number>>((acc, order) => {
+    const status = normalizeStatus(order.status) || "unknown";
+    acc[status] = (acc[status] || 0) + 1;
+    return acc;
+  }, {});
 
   return NextResponse.json({
     success: true,
     currency: orders[0]?.currency || "UGX",
     totals: {
       orders: orders.length,
+      liveOrders: liveOrders.length,
       paidOrders: paidOrders.length,
-      pendingOrders: pendingOrders.length,
-      deliveredOrders: deliveredOrders.length,
+      pendingOrders: liveOrders.filter((order) =>
+        ["pending", "pending_payment"].includes(normalizeStatus(order.status)),
+      ).length,
+      deliveredOrders: liveOrders.filter(
+        (order) => normalizeStatus(order.status) === "delivered",
+      ).length,
+      cancelledOrders: orders.length - liveOrders.length,
       revenue,
+      productRevenue,
       deliveryFees,
+      outstandingCod,
       averageOrderValue,
     },
-    byStatus: Object.entries(
-      orders.reduce<Record<string, number>>((acc, order) => {
-        const status = normalizeStatus(order.status) || "unknown";
-        acc[status] = (acc[status] || 0) + 1;
-        return acc;
-      }, {}),
-    ).map(([status, count]) => ({ status, count })),
+    byStatus: Object.entries(statusCounts).map(([status, count]) => ({
+      status,
+      count,
+    })),
     topProducts: Array.from(productSales.values())
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 10),

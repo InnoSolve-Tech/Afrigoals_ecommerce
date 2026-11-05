@@ -36,6 +36,7 @@ export function DeliveryMapPicker({
   const [searchValue, setSearchValue] = useState("");
   const [selectedLocation, setSelectedLocation] =
     useState<SelectedLocation | null>(null);
+  const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [isResolving, setIsResolving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -217,11 +218,13 @@ export function DeliveryMapPicker({
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
 
+    // Only signals that the Maps bootstrap script is present; the picker is
+    // marked ready (isReady) once the geocoder and autocomplete are attached.
     function waitForGoogleMaps() {
       const googleMaps = getGoogleMaps();
 
       if (googleMaps) {
-        setIsReady(true);
+        setIsGoogleLoaded(true);
         return;
       }
 
@@ -230,7 +233,7 @@ export function DeliveryMapPicker({
 
     waitForGoogleMaps();
 
-    const handler = () => setIsReady(true);
+    const handler = () => setIsGoogleLoaded(true);
     window.addEventListener("google-maps-ready", handler);
 
     return () => {
@@ -243,7 +246,7 @@ export function DeliveryMapPicker({
   }, []);
 
   useEffect(() => {
-    if (!isReady || !mapRef.current || !inputRef.current) {
+    if (!isGoogleLoaded || !mapRef.current || !inputRef.current) {
       return;
     }
 
@@ -262,15 +265,25 @@ export function DeliveryMapPicker({
         let AdvancedMarkerElement = googleMaps.marker?.AdvancedMarkerElement;
         let AutocompleteClass = googleMaps.places?.Autocomplete;
 
+        // With the dynamic loader, classes such as Geocoder only exist on
+        // google.maps after their library is imported, so import them all
+        // here before constructing anything.
         if (typeof googleMaps.importLibrary === "function") {
           const mapsLibrary = await googleMaps.importLibrary("maps");
           const markerLibrary = await googleMaps.importLibrary("marker");
           const placesLibrary = await googleMaps.importLibrary("places");
+          const geocodingLibrary = await googleMaps.importLibrary("geocoding");
 
           MapClass = mapsLibrary.Map || MapClass;
           AdvancedMarkerElement =
             markerLibrary.AdvancedMarkerElement || AdvancedMarkerElement;
           AutocompleteClass = placesLibrary.Autocomplete || AutocompleteClass;
+          GeocoderClass = geocodingLibrary.Geocoder || GeocoderClass;
+        }
+
+        if (!GeocoderClass) {
+          setError("Google Geocoder is not loaded. Please refresh the page.");
+          return;
         }
 
         if (cancelled || !mapRef.current || !inputRef.current) {
@@ -365,6 +378,12 @@ export function DeliveryMapPicker({
 
           await handleMapPoint({ lat, lng });
         });
+
+        // Search and autocomplete are only enabled once everything is attached,
+        // so the first search no longer hits a half-initialised picker.
+        if (!cancelled) {
+          setIsReady(true);
+        }
       } catch (err) {
         console.error("Failed to initialize delivery map:", err);
         setError("Failed to initialize map autocomplete.");
@@ -376,7 +395,7 @@ export function DeliveryMapPicker({
     return () => {
       cancelled = true;
     };
-  }, [isReady, initialCenter]);
+  }, [isGoogleLoaded, initialCenter]);
 
   return (
     <div className="space-y-3">

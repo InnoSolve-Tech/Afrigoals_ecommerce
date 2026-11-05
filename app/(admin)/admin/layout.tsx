@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  CreditCard,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -22,6 +23,7 @@ const navItems = [
   { label: "Inventory", href: "/admin/inventory", icon: Package },
   { label: "Orders", href: "/admin/orders", icon: ShoppingCart },
   { label: "Reconciliation", href: "/admin/reconciliation", icon: ReceiptText },
+  { label: "Payments", href: "/admin/payments", icon: CreditCard },
 ];
 
 export default function AdminLayout({

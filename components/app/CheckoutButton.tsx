@@ -9,7 +9,7 @@ import type { CartItem } from "@/lib/store/cart-store";
 import { createCheckoutSession } from "@/lib/actions/checkout";
 import { createCashOnDeliveryOrder } from "@/lib/actions/create-cash-on-delivery-order";
 
-type PaymentMethod = "pesapal" | "cod";
+type PaymentMethod = "pesapal" | "cod" | "mobile_money";
 
 interface CheckoutButtonProps {
   disabled?: boolean;
@@ -176,19 +176,25 @@ export function CheckoutButton({
 
     startTransition(async () => {
       try {
-        if (paymentMethod === "cod") {
-          const result = await createCashOnDeliveryOrder(checkoutItems, {
-            address: deliveryAddress.trim(),
-            lat: deliveryLat,
-            lng: deliveryLng,
-            fee: deliveryFee,
-            distanceKm: deliveryDistanceKm,
+        if (paymentMethod === "cod" || paymentMethod === "mobile_money") {
+          // Mobile money creates a pending order, then sends the customer to the
+          // pay page. The order is only paid once the server verifies the payment.
+          const result = await createCashOnDeliveryOrder(
+            checkoutItems,
+            {
+              address: deliveryAddress.trim(),
+              lat: deliveryLat,
+              lng: deliveryLng,
+              fee: deliveryFee,
+              distanceKm: deliveryDistanceKm,
 
-            contactName: receiverName,
-            contactPhone: receiverPhone,
-            altPhone: receiverAltPhone,
-            note: receiverNote,
-          });
+              contactName: receiverName,
+              contactPhone: receiverPhone,
+              altPhone: receiverAltPhone,
+              note: receiverNote,
+            },
+            paymentMethod,
+          );
 
           if (!result.success) {
             if (result.url) {
@@ -210,7 +216,10 @@ export function CheckoutButton({
           }
 
           toast.success("Order placed successfully", {
-            description: "Cash on delivery has been selected for this order.",
+            description:
+              paymentMethod === "mobile_money"
+                ? "Your order is saved. Continue to approve the payment."
+                : "Cash on delivery has been selected for this order.",
           });
 
           if (result.url) {
@@ -289,10 +298,14 @@ export function CheckoutButton({
   const buttonLabel = isPending
     ? paymentMethod === "cod"
       ? "Placing order..."
-      : "Connecting to Pesapal..."
+      : paymentMethod === "mobile_money"
+        ? "Creating order..."
+        : "Connecting to Pesapal..."
     : paymentMethod === "cod"
       ? "Place Order (Cash on Delivery)"
-      : "Pay with Pesapal";
+      : paymentMethod === "mobile_money"
+        ? "Continue to Mobile Money"
+        : "Pay with Pesapal";
 
   return (
     <div className="space-y-3">
@@ -333,7 +346,9 @@ export function CheckoutButton({
       <p className="text-center text-xs text-muted-foreground">
         {paymentMethod === "cod"
           ? "Pay in cash when the order is delivered"
-          : "Secure payment via Pesapal • Mobile Money • Visa • Mastercard"}
+          : paymentMethod === "mobile_money"
+            ? "Approve the MTN or Airtel prompt on your phone to confirm payment"
+            : "Secure payment via Pesapal • Mobile Money • Visa • Mastercard"}
       </p>
     </div>
   );

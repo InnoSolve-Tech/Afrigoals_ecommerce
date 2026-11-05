@@ -10,6 +10,7 @@ import { DeliveryMapPicker } from "@/components/checkout/DeliveryMapPicker";
 import { GoogleMapsScript } from "@/components/checkout/google-maps-script";
 import { Button } from "@/components/ui/button";
 import { getDeliveryQuote } from "@/lib/actions/delivery";
+import { CHECKOUT_DRAFT_KEY, type CheckoutDraft } from "@/lib/checkout/draft";
 import { useCartStock } from "@/lib/hooks/useCartStock";
 import {
   useCartItems,
@@ -22,7 +23,10 @@ import {
 } from "@/lib/store/cart-store";
 import { formatPrice } from "@/lib/utils";
 
-type PaymentMethod = "pesapal" | "cod";
+type PaymentMethod = "pesapal" | "cod" | "mobile_money";
+
+// Public, non-secret switch. The server enforces IOTEC_MOBILE_MONEY_ENABLED too.
+const MOBILE_MONEY_ENABLED = process.env.NEXT_PUBLIC_MOBILE_MONEY_ENABLED === "true";
 
 type CartAccessoryLike = {
   accessoryId: string;
@@ -194,6 +198,85 @@ export function CheckoutClient() {
 
   const deliveryContactReady =
     deliveryContactName.trim() !== "" && deliveryContactPhone.trim() !== "";
+
+  // Guests can fill in checkout, then sign in. The form is saved locally so it
+  // survives the sign-in redirect; the cart already persists via cart-store.
+  const [draftLoaded, setDraftLoaded] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(CHECKOUT_DRAFT_KEY);
+      if (raw) {
+        const draft = JSON.parse(raw) as CheckoutDraft;
+
+        if (
+          draft.paymentMethod === "cod" ||
+          draft.paymentMethod === "pesapal" ||
+          (draft.paymentMethod === "mobile_money" && MOBILE_MONEY_ENABLED)
+        ) {
+          setPaymentMethod(draft.paymentMethod);
+        }
+        setDeliveryAddress(draft.deliveryAddress ?? "");
+        setDeliveryContactName(draft.deliveryContactName ?? "");
+        setDeliveryContactPhone(draft.deliveryContactPhone ?? "");
+        setDeliveryAltPhone(draft.deliveryAltPhone ?? "");
+        setDeliveryNote(draft.deliveryNote ?? "");
+
+        if (
+          typeof draft.deliveryLat === "number" &&
+          typeof draft.deliveryLng === "number"
+        ) {
+          const { deliveryLat: lat, deliveryLng: lng } = draft;
+          setDeliveryLat(lat);
+          setDeliveryLng(lng);
+
+          // Re-quote instead of restoring a stored fee: traffic pricing depends
+          // on the time of day, so the saved fee may be stale.
+          startTransition(async () => {
+            const result = await getDeliveryQuote({ lat, lng });
+
+            if (result.success && typeof result.fee === "number") {
+              setDeliveryFee(result.fee);
+              setDeliveryDistanceKm(result.distanceKm ?? null);
+            } else {
+              setDeliveryError(result.error || "Failed to calculate delivery");
+            }
+          });
+        }
+      }
+    } catch {
+      window.localStorage.removeItem(CHECKOUT_DRAFT_KEY);
+    }
+
+    setDraftLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!draftLoaded) return;
+
+    const draft: CheckoutDraft = {
+      paymentMethod,
+      deliveryAddress,
+      deliveryLat,
+      deliveryLng,
+      deliveryContactName,
+      deliveryContactPhone,
+      deliveryAltPhone,
+      deliveryNote,
+    };
+
+    window.localStorage.setItem(CHECKOUT_DRAFT_KEY, JSON.stringify(draft));
+  }, [
+    draftLoaded,
+    paymentMethod,
+    deliveryAddress,
+    deliveryLat,
+    deliveryLng,
+    deliveryContactName,
+    deliveryContactPhone,
+    deliveryAltPhone,
+    deliveryNote,
+  ]);
 
   useEffect(() => {
     const productIdsNeedingAccessories = Array.from(
@@ -586,6 +669,38 @@ export function CheckoutClient() {
                     />
                   </div>
                 </button>
+
+                {MOBILE_MONEY_ENABLED ? (
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod("mobile_money")}
+                    className={`w-full rounded-lg border p-4 text-left transition ${
+                      paymentMethod === "mobile_money"
+                        ? "border-zinc-900 bg-zinc-50 dark:border-zinc-100 dark:bg-zinc-900"
+                        : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="font-medium text-zinc-900 dark:text-zinc-100">
+                          Mobile Money (MTN / Airtel)
+                        </p>
+                        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                          Pay from your MTN or Airtel line. You approve the
+                          payment prompt on your phone.
+                        </p>
+                      </div>
+
+                      <div
+                        className={`mt-1 h-4 w-4 rounded-full border ${
+                          paymentMethod === "mobile_money"
+                            ? "border-zinc-900 bg-zinc-900 dark:border-zinc-100 dark:bg-zinc-100"
+                            : "border-zinc-400"
+                        }`}
+                      />
+                    </div>
+                  </button>
+                ) : null}
               </div>
             </div>
 
@@ -825,7 +940,9 @@ export function CheckoutClient() {
                   <span className="text-zinc-900 dark:text-zinc-100">
                     {paymentMethod === "pesapal"
                       ? "Pesapal"
-                      : "Cash on Delivery"}
+                      : paymentMethod === "mobile_money"
+                        ? "Mobile Money (MTN / Airtel)"
+                        : "Cash on Delivery"}
                   </span>
                 </div>
 
@@ -874,7 +991,9 @@ export function CheckoutClient() {
               <p className="mt-4 text-center text-xs text-zinc-500 dark:text-zinc-400">
                 {paymentMethod === "pesapal"
                   ? "You'll be redirected to Pesapal's secure checkout."
-                  : "You will pay in cash when your order is delivered."}
+                  : paymentMethod === "mobile_money"
+                    ? "After you place the order, approve the payment prompt on your phone."
+                    : "You will pay in cash when your order is delivered."}
               </p>
             </div>
           </div>

@@ -34,6 +34,7 @@ type StockMode = "total" | "size" | "color" | "size_color";
 
 type FlexibleApiProduct = ApiProduct & {
   category?: string;
+  vendor?: string;
   sport?: string;
   sportCategory?: string;
   sport_category?: string;
@@ -154,6 +155,7 @@ export function ProductUpsertDialog({
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("general");
   const [sport, setSport] = useState("football");
+  const [vendor, setVendor] = useState("Afrigoals");
   const [isFeatured, setIsFeatured] = useState(false);
   const [currency, setCurrency] = useState("UGX");
   const [price, setPrice] = useState("0");
@@ -214,6 +216,7 @@ export function ProductUpsertDialog({
             "football",
         ),
       );
+      setVendor(String(flexibleProduct.vendor || "Afrigoals"));
       setIsFeatured(Boolean(flexibleProduct.isFeatured ?? flexibleProduct.is_featured));
       setCurrency((flexibleProduct.currency || "UGX").toUpperCase());
       setPrice(String(flexibleProduct.price ?? 0));
@@ -230,6 +233,7 @@ export function ProductUpsertDialog({
     setDescription("");
     setCategory("general");
     setSport("football");
+    setVendor("Afrigoals");
     setIsFeatured(false);
     setCurrency("UGX");
     setPrice("0");
@@ -418,6 +422,7 @@ export function ProductUpsertDialog({
         description: description.trim(),
         category,
         sport,
+        vendor: vendor.trim() || "Afrigoals",
         isFeatured,
         currency: currency.trim(),
         price: priceNumber,
@@ -540,6 +545,17 @@ export function ProductUpsertDialog({
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="product-vendor">Vendor</Label>
+              <Input
+                id="product-vendor"
+                value={vendor}
+                onChange={(e) => setVendor(e.target.value)}
+                placeholder="Afrigoals"
+                maxLength={120}
+              />
             </div>
 
             <label className="flex items-center gap-2 rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800">

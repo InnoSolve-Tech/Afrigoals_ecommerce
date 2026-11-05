@@ -145,8 +145,10 @@ export function ProductInfo({ product }: ProductInfoProps) {
     [variants],
   );
 
+  // Variant choices start empty so the shopper must pick them explicitly.
+  // A dimension is only auto-filled when there is exactly one option.
   const [selectedSize, setSelectedSize] = useState<string | null>(
-    sizeOptions[0] ?? null,
+    sizeOptions.length === 1 ? sizeOptions[0] : null,
   );
 
   const colorOptionsForSelectedSize = useMemo(
@@ -166,7 +168,9 @@ export function ProductInfo({ product }: ProductInfoProps) {
   );
 
   const [selectedColor, setSelectedColor] = useState<string | null>(
-    colorOptionsForSelectedSize[0] ?? null,
+    colorOptionsForSelectedSize.length === 1
+      ? colorOptionsForSelectedSize[0]
+      : null,
   );
 
   useEffect(() => {
@@ -181,7 +185,7 @@ export function ProductInfo({ product }: ProductInfoProps) {
         return current;
       }
 
-      return sizeOptions[0] ?? null;
+      return sizeOptions.length === 1 ? sizeOptions[0] : null;
     });
   }, [hasVariants, sizeOptions]);
 
@@ -196,12 +200,18 @@ export function ProductInfo({ product }: ProductInfoProps) {
         return current;
       }
 
-      return colorOptionsForSelectedSize[0] ?? null;
+      return colorOptionsForSelectedSize.length === 1
+        ? colorOptionsForSelectedSize[0]
+        : null;
     });
   }, [hasVariants, colorOptionsForSelectedSize]);
 
   const selectedVariant = useMemo(() => {
     if (!hasVariants) return null;
+
+    // Only resolve a variant once every required option has been chosen.
+    if (sizeOptions.length > 0 && !selectedSize) return null;
+    if (colorOptionsForSelectedSize.length > 0 && !selectedColor) return null;
 
     return (
       variants.find((variant) => {
@@ -213,15 +223,24 @@ export function ProductInfo({ product }: ProductInfoProps) {
         return sizeMatches && colorMatches;
       }) ?? null
     );
-  }, [hasVariants, variants, selectedSize, selectedColor]);
+  }, [
+    hasVariants,
+    variants,
+    sizeOptions,
+    colorOptionsForSelectedSize,
+    selectedSize,
+    selectedColor,
+  ]);
 
   const totalVariantStock = useMemo(
     () => variants.reduce((total, variant) => total + variant.stock, 0),
     [variants],
   );
 
+  // Before a variant is chosen, report the product-wide stock so the button
+  // does not show "out of stock"; validateProductSelection blocks the add.
   const effectiveStock = hasVariants
-    ? selectedVariant?.stock ?? 0
+    ? (selectedVariant?.stock ?? totalVariantStock)
     : Number(product.stock ?? 0);
 
   const discountPercent = useMemo(
@@ -498,6 +517,14 @@ export function ProductInfo({ product }: ProductInfoProps) {
 
   function validateProductSelection(): string | null {
     if (hasVariants && !selectedVariant) {
+      if (sizeOptions.length > 0 && !selectedSize) {
+        return "Please select a size before adding to basket.";
+      }
+
+      if (colorOptionsForSelectedSize.length > 0 && !selectedColor) {
+        return "Please select a colour before adding to basket.";
+      }
+
       return "Please select an available size and colour.";
     }
 
