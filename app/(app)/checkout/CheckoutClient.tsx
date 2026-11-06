@@ -13,20 +13,21 @@ import { getDeliveryQuote } from "@/lib/actions/delivery";
 import { CHECKOUT_DRAFT_KEY, type CheckoutDraft } from "@/lib/checkout/draft";
 import { useCartStock } from "@/lib/hooks/useCartStock";
 import {
+  type CartItem as CartItemType,
+  getCartItemKey,
+} from "@/lib/store/cart-store";
+import {
   useCartItems,
   useTotalItems,
   useTotalPrice,
 } from "@/lib/store/cart-store-provider";
-import {
-  getCartItemKey,
-  type CartItem as CartItemType,
-} from "@/lib/store/cart-store";
 import { formatPrice } from "@/lib/utils";
 
-type PaymentMethod = "pesapal" | "cod" | "mobile_money";
+type PaymentMethod = "cod" | "mobile_money";
 
 // Public, non-secret switch. The server enforces IOTEC_MOBILE_MONEY_ENABLED too.
-const MOBILE_MONEY_ENABLED = process.env.NEXT_PUBLIC_MOBILE_MONEY_ENABLED === "true";
+const MOBILE_MONEY_ENABLED =
+  process.env.NEXT_PUBLIC_MOBILE_MONEY_ENABLED !== "false";
 
 type CartAccessoryLike = {
   accessoryId: string;
@@ -171,7 +172,9 @@ export function CheckoutClient() {
   const { stockMap, isLoading, hasStockIssues } = useCartStock(rawItems);
 
   const [isCalculating, startTransition] = useTransition();
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pesapal");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
+    MOBILE_MONEY_ENABLED ? "mobile_money" : "cod",
+  );
 
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryLat, setDeliveryLat] = useState<number | null>(null);
@@ -211,7 +214,6 @@ export function CheckoutClient() {
 
         if (
           draft.paymentMethod === "cod" ||
-          draft.paymentMethod === "pesapal" ||
           (draft.paymentMethod === "mobile_money" && MOBILE_MONEY_ENABLED)
         ) {
           setPaymentMethod(draft.paymentMethod);
@@ -613,9 +615,9 @@ export function CheckoutClient() {
               <div className="mt-4 space-y-3">
                 <button
                   type="button"
-                  onClick={() => setPaymentMethod("pesapal")}
+                  onClick={() => setPaymentMethod("mobile_money")}
                   className={`w-full rounded-lg border p-4 text-left transition ${
-                    paymentMethod === "pesapal"
+                    paymentMethod === "mobile_money"
                       ? "border-zinc-900 bg-zinc-50 dark:border-zinc-100 dark:bg-zinc-900"
                       : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700"
                   }`}
@@ -623,17 +625,17 @@ export function CheckoutClient() {
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="font-medium text-zinc-900 dark:text-zinc-100">
-                        Pay online with Pesapal
+                        Pay with IOTEC
                       </p>
                       <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                        Mobile Money, Visa, Mastercard and other supported
-                        payment methods.
+                        Pay using MTN or Airtel Mobile Money. Approve the
+                        payment prompt on your phone.
                       </p>
                     </div>
 
                     <div
                       className={`mt-1 h-4 w-4 rounded-full border ${
-                        paymentMethod === "pesapal"
+                        paymentMethod === "mobile_money"
                           ? "border-zinc-900 bg-zinc-900 dark:border-zinc-100 dark:bg-zinc-100"
                           : "border-zinc-400"
                       }`}
@@ -669,38 +671,6 @@ export function CheckoutClient() {
                     />
                   </div>
                 </button>
-
-                {MOBILE_MONEY_ENABLED ? (
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod("mobile_money")}
-                    className={`w-full rounded-lg border p-4 text-left transition ${
-                      paymentMethod === "mobile_money"
-                        ? "border-zinc-900 bg-zinc-50 dark:border-zinc-100 dark:bg-zinc-900"
-                        : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="font-medium text-zinc-900 dark:text-zinc-100">
-                          Mobile Money (MTN / Airtel)
-                        </p>
-                        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                          Pay from your MTN or Airtel line. You approve the
-                          payment prompt on your phone.
-                        </p>
-                      </div>
-
-                      <div
-                        className={`mt-1 h-4 w-4 rounded-full border ${
-                          paymentMethod === "mobile_money"
-                            ? "border-zinc-900 bg-zinc-900 dark:border-zinc-100 dark:bg-zinc-100"
-                            : "border-zinc-400"
-                        }`}
-                      />
-                    </div>
-                  </button>
-                ) : null}
               </div>
             </div>
 
@@ -938,11 +908,9 @@ export function CheckoutClient() {
                     Payment
                   </span>
                   <span className="text-zinc-900 dark:text-zinc-100">
-                    {paymentMethod === "pesapal"
-                      ? "Pesapal"
-                      : paymentMethod === "mobile_money"
-                        ? "Mobile Money (MTN / Airtel)"
-                        : "Cash on Delivery"}
+                    {paymentMethod === "mobile_money"
+                      ? "IOTEC Mobile Money"
+                      : "Cash on Delivery"}
                   </span>
                 </div>
 
@@ -989,11 +957,9 @@ export function CheckoutClient() {
               </div>
 
               <p className="mt-4 text-center text-xs text-zinc-500 dark:text-zinc-400">
-                {paymentMethod === "pesapal"
-                  ? "You'll be redirected to Pesapal's secure checkout."
-                  : paymentMethod === "mobile_money"
-                    ? "After you place the order, approve the payment prompt on your phone."
-                    : "You will pay in cash when your order is delivered."}
+                {paymentMethod === "mobile_money"
+                  ? "Continue to enter your MTN or Airtel number and approve the IOTEC payment prompt."
+                  : "You will pay in cash when your order is delivered."}
               </p>
             </div>
           </div>

@@ -211,9 +211,11 @@ export function MobileMoneyPayClient({
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-          Pay with Mobile Money
+          Pay with IOTEC
         </h1>
-        <p className="mt-1 text-sm text-zinc-500">Order {orderNumber}</p>
+        <p className="mt-1 text-sm text-zinc-500">
+          MTN or Airtel Mobile Money · Order {orderNumber}
+        </p>
       </div>
 
       <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
@@ -318,7 +320,7 @@ export function MobileMoneyPayClient({
                 Sending request…
               </>
             ) : attempt.status === "none" ? (
-              `Pay ${amountLabel} now`
+              `Pay ${amountLabel} with IOTEC`
             ) : (
               "Try again"
             )}

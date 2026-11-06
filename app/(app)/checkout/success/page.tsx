@@ -12,6 +12,7 @@ interface SuccessPageProps {
     session_id?: string;
     paymentMethod?: string;
     order?: string;
+    orderNumber?: string;
   }>;
 }
 
@@ -19,15 +20,20 @@ export default async function SuccessPage({ searchParams }: SuccessPageProps) {
   const params = await searchParams;
   const sessionId = params.session_id ?? null;
   const paymentMethod = params.paymentMethod ?? "pesapal";
-  const orderNumber = params.order ?? null;
+  const orderNumber = params.orderNumber ?? params.order ?? null;
 
-  // COD orders only need an order number
-  if (paymentMethod === "cod" && !orderNumber) {
+  if (
+    (paymentMethod === "cod" || paymentMethod === "mobile_money") &&
+    !orderNumber
+  ) {
     redirect("/");
   }
 
-  // Pesapal orders need a session id
-  if (paymentMethod !== "cod" && !sessionId) {
+  if (
+    paymentMethod !== "cod" &&
+    paymentMethod !== "mobile_money" &&
+    !sessionId
+  ) {
     redirect("/");
   }
 

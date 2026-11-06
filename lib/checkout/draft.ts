@@ -4,7 +4,7 @@
 export const CHECKOUT_DRAFT_KEY = "afrigoals-checkout-draft";
 
 export type CheckoutDraft = {
-  paymentMethod?: "pesapal" | "cod" | "mobile_money";
+  paymentMethod?: "cod" | "mobile_money";
   deliveryAddress?: string;
   deliveryLat?: number | null;
   deliveryLng?: number | null;
