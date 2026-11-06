@@ -286,7 +286,7 @@ export function MobileMoneyPayClient({
               htmlFor="mm-phone"
               className="text-sm font-medium text-zinc-900 dark:text-zinc-100"
             >
-              MTN or Airtel mobile money number
+              Payer phone number
             </label>
             <Input
               id="mm-phone"
@@ -299,8 +299,8 @@ export function MobileMoneyPayClient({
               disabled={submitting}
             />
             <p className="text-xs text-zinc-500">
-              Use the Ugandan number that will approve the payment, for example
-              0771234567.
+              Enter the MTN or Airtel number that will receive and approve the
+              IOTEC payment prompt, for example 0771234567.
             </p>
           </div>
 
