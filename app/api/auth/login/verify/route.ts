@@ -1,3 +1,4 @@
+import { getBackendApiBaseUrl } from "@/lib/api/backend";
 // app/api/auth/login/verify/route.ts
 import { NextResponse } from "next/server";
 import {
@@ -6,10 +7,7 @@ import {
   TRUSTED_DEVICE_MAX_AGE_SECONDS,
 } from "@/lib/auth/constants";
 
-const apiBaseUrl = (
-  process.env.AFRIGOALS_API_URL ||
-  "http://localhost:8080/api/v1"
-).replace(/\/+$/, "");
+const apiBaseUrl = getBackendApiBaseUrl();
 
 export async function POST(req: Request) {
   let body: { challengeId?: string; code?: string };

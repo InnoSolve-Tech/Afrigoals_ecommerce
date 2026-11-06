@@ -1,26 +1,34 @@
-import { AUTH_COOKIE_NAME } from "@/lib/auth/constants";
 import { cookies } from "next/headers";
+import { buildBackendApiUrl } from "@/lib/api/backend";
+import { AUTH_COOKIE_NAME } from "@/lib/auth/constants";
 
-export function getBackendBaseUrl() {
-  return (
-    process.env.AFRIGOALS_API_URL ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    "http://localhost:8080/api/v1"
-  ).replace(/\/+$/, "");
+function unauthenticatedResponse() {
+  return new Response(JSON.stringify({ error: "not authenticated" }), {
+    status: 401,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
+// Use only for routes that genuinely need a signed-in customer or admin.
+// Public catalog data must use lib/api/client.ts or lib/api/client-public.ts.
 export async function authedFetch(inputPath: string, init?: RequestInit) {
   const cookieStore = await cookies();
   const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
+  return authedFetchWithToken(token, inputPath, init);
+}
+
+// Separated from authedFetch so the "no token -> 401, backend never called"
+// rule can be tested without a Next.js request context.
+export function authedFetchWithToken(
+  token: string | null | undefined,
+  inputPath: string,
+  init?: RequestInit,
+) {
   if (!token) {
-    return new Response(JSON.stringify({ error: "not authenticated" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
-    });
+    return Promise.resolve(unauthenticatedResponse());
   }
 
-  const baseUrl = getBackendBaseUrl();
-  return fetch(`${baseUrl}${inputPath}`, {
+  return fetch(buildBackendApiUrl(inputPath), {
     ...init,
     headers: {
       ...(init?.headers || {}),

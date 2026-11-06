@@ -1,12 +1,9 @@
+import { getBackendApiBaseUrl } from "@/lib/api/backend";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { AUTH_COOKIE_NAME } from "@/lib/auth/constants";
 
-const apiBaseUrl = (
-  process.env.AFRIGOALS_API_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:8080/api/v1"
-).replace(/\/+$/, "");
+const apiBaseUrl = getBackendApiBaseUrl();
 
 export async function GET(req: Request) {
   void req;

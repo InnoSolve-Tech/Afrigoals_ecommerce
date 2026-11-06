@@ -1,9 +1,8 @@
+import { getBackendApiBaseUrl } from "@/lib/api/backend";
 import { NextResponse } from "next/server";
 import { AUTH_COOKIE_NAME } from "@/lib/auth/constants";
 
-const API_BASE_URL = (
-  process.env.AFRIGOALS_API_URL || "http://localhost:8080/api/v1"
-).replace(/\/$/, "");
+const API_BASE_URL = getBackendApiBaseUrl();
 
 export async function POST(req: Request) {
   try {

@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { AUTH_COOKIE_NAME } from "@/lib/auth/constants";
 import type { CartItemAccessory } from "@/lib/api/types";
 import { calculateDeliveryFee } from "@/lib/delivery/calculate-delivery-fee";
+import { getBackendApiBaseUrl } from "@/lib/api/backend";
 
 type CartItem = {
   productId: string;
@@ -45,15 +46,6 @@ type GoCheckoutResponse = {
   error?: string;
   message?: string;
 };
-
-function getApiBaseUrl() {
-  const raw =
-    process.env.AFRIGOALS_API_URL ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    "http://localhost:8080";
-
-  return raw.replace(/\/+$/, "");
-}
 
 function cleanPhone(value: string | undefined): string {
   return String(value || "")
@@ -236,7 +228,7 @@ export async function createCheckoutSession(
     }
 
     const quote = await calculateDeliveryFee(delivery.lat, delivery.lng);
-    const apiBaseUrl = getApiBaseUrl();
+    const apiBaseUrl = getBackendApiBaseUrl();
 
     const payload = {
       items: items.map(buildCheckoutItem),
