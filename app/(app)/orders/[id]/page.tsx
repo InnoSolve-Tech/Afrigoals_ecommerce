@@ -388,7 +388,9 @@ function PaymentStatusBadge({
     : isPaid
       ? normalizedPaymentMethod === "pesapal"
         ? "Paid online through Pesapal"
-        : "Payment received"
+        : normalizedPaymentMethod === "mobile_money"
+          ? "Paid through IOTEC Mobile Money"
+          : "Payment received"
       : normalizedPaymentMethod === "cod" ||
           normalizedPaymentMethod === "cash_on_delivery"
         ? "Cash to be collected on delivery"
@@ -799,7 +801,9 @@ export default async function OrderDetailPage({
 
               return (
                 <div
-                  key={item.id || `${item.productId || item.productName}-${index}`}
+                  key={
+                    item.id || `${item.productId || item.productName}-${index}`
+                  }
                   className="flex gap-4 border-b border-zinc-100 pb-5 last:border-b-0 last:pb-0 dark:border-zinc-800"
                 >
                   <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-md border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900">
@@ -1066,7 +1070,10 @@ export default async function OrderDetailPage({
                   Method
                 </span>
                 <span className="font-medium text-zinc-900 dark:text-zinc-100 sm:block">
-                  {order.paymentMethod || "—"}
+                  {normalizePaymentStatus(order.paymentMethod) ===
+                  "mobile_money"
+                    ? "IOTEC Mobile Money"
+                    : order.paymentMethod || "—"}
                 </span>
               </div>
 

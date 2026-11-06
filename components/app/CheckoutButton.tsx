@@ -1,15 +1,14 @@
 "use client";
 
+import { Banknote, CreditCard, Loader2 } from "lucide-react";
 import { useState, useTransition } from "react";
-import { Loader2, CreditCard, Banknote } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { useCartItems } from "@/lib/store/cart-store-provider";
-import type { CartItem } from "@/lib/store/cart-store";
-import { createCheckoutSession } from "@/lib/actions/checkout";
 import { createCashOnDeliveryOrder } from "@/lib/actions/create-cash-on-delivery-order";
+import type { CartItem } from "@/lib/store/cart-store";
+import { useCartItems } from "@/lib/store/cart-store-provider";
 
-type PaymentMethod = "pesapal" | "cod" | "mobile_money";
+type PaymentMethod = "cod" | "mobile_money";
 
 interface CheckoutButtonProps {
   disabled?: boolean;
@@ -176,71 +175,24 @@ export function CheckoutButton({
 
     startTransition(async () => {
       try {
-        if (paymentMethod === "cod" || paymentMethod === "mobile_money") {
-          // Mobile money creates a pending order, then sends the customer to the
-          // pay page. The order is only paid once the server verifies the payment.
-          const result = await createCashOnDeliveryOrder(
-            checkoutItems,
-            {
-              address: deliveryAddress.trim(),
-              lat: deliveryLat,
-              lng: deliveryLng,
-              fee: deliveryFee,
-              distanceKm: deliveryDistanceKm,
+        // Mobile money creates a pending order, then sends the customer to the
+        // IOTEC payment page. The server confirms payment before marking it paid.
+        const result = await createCashOnDeliveryOrder(
+          checkoutItems,
+          {
+            address: deliveryAddress.trim(),
+            lat: deliveryLat,
+            lng: deliveryLng,
+            fee: deliveryFee,
+            distanceKm: deliveryDistanceKm,
 
-              contactName: receiverName,
-              contactPhone: receiverPhone,
-              altPhone: receiverAltPhone,
-              note: receiverNote,
-            },
-            paymentMethod,
-          );
-
-          if (!result.success) {
-            if (result.url) {
-              window.location.href = result.url;
-              return;
-            }
-
-            const message =
-              result.error ||
-              "Cash on delivery order could not be created. Please try again.";
-
-            setError(message);
-
-            toast.error("Order Creation Failed", {
-              description: message,
-            });
-
-            return;
-          }
-
-          toast.success("Order placed successfully", {
-            description:
-              paymentMethod === "mobile_money"
-                ? "Your order is saved. Continue to approve the payment."
-                : "Cash on delivery has been selected for this order.",
-          });
-
-          if (result.url) {
-            window.location.href = result.url;
-            return;
-          }
-
-          window.location.href = "/checkout/success?paymentMethod=cod";
-          return;
-        }
-
-        const result = await createCheckoutSession(checkoutItems, {
-          address: deliveryAddress.trim(),
-          lat: deliveryLat,
-          lng: deliveryLng,
-
-          contactName: receiverName,
-          contactPhone: receiverPhone,
-          altPhone: receiverAltPhone,
-          note: receiverNote,
-        });
+            contactName: receiverName,
+            contactPhone: receiverPhone,
+            altPhone: receiverAltPhone,
+            note: receiverNote,
+          },
+          paymentMethod,
+        );
 
         if (!result.success) {
           if (result.url) {
@@ -249,23 +201,28 @@ export function CheckoutButton({
           }
 
           const message =
-            result.error || "Payment initialization failed. Please try again.";
+            result.error || "Order could not be created. Please try again.";
 
           setError(message);
 
-          toast.error("Pesapal Checkout Error", {
-            description: message,
-          });
+          toast.error(
+            paymentMethod === "cod"
+              ? "Order Creation Failed"
+              : "IOTEC Payment Error",
+            {
+              description: message,
+            },
+          );
 
           return;
         }
 
         if (!result.url) {
-          const message = "Payment gateway did not return a redirect URL.";
+          const message = "Order was created, but no next step was returned.";
 
           setError(message);
 
-          toast.error("Pesapal Error", {
+          toast.error("Checkout Error", {
             description: message,
           });
 
@@ -281,7 +238,7 @@ export function CheckoutButton({
             ? err.message
             : paymentMethod === "cod"
               ? "Unexpected error while creating the cash on delivery order."
-              : "Unexpected error while starting payment.";
+              : "Unexpected error while starting IOTEC mobile money payment.";
 
         setError(message);
 
@@ -299,13 +256,13 @@ export function CheckoutButton({
     ? paymentMethod === "cod"
       ? "Placing order..."
       : paymentMethod === "mobile_money"
-        ? "Creating order..."
-        : "Connecting to Pesapal..."
+        ? "Starting IOTEC payment..."
+        : "Placing order..."
     : paymentMethod === "cod"
       ? "Place Order (Cash on Delivery)"
       : paymentMethod === "mobile_money"
-        ? "Continue to Mobile Money"
-        : "Pay with Pesapal";
+        ? "Pay with IOTEC"
+        : "Place Order (Cash on Delivery)";
 
   return (
     <div className="space-y-3">
@@ -347,8 +304,8 @@ export function CheckoutButton({
         {paymentMethod === "cod"
           ? "Pay in cash when the order is delivered"
           : paymentMethod === "mobile_money"
-            ? "Approve the MTN or Airtel prompt on your phone to confirm payment"
-            : "Secure payment via Pesapal • Mobile Money • Visa • Mastercard"}
+            ? "Secure IOTEC payment via MTN or Airtel Mobile Money"
+            : "Pay in cash when the order is delivered"}
       </p>
     </div>
   );

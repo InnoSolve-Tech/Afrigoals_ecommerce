@@ -79,7 +79,9 @@ export function SuccessClient({
                 <>
                   <Package className="h-4 w-4 text-zinc-400" />
                   <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                    {isMobileMoney ? "Mobile Money (MTN / Airtel)" : "Pesapal"}
+                    {isMobileMoney
+                      ? "IOTEC Mobile Money (MTN / Airtel)"
+                      : "Pesapal"}
                   </span>
                 </>
               )}
