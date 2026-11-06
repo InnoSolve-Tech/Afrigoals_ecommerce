@@ -1,16 +1,12 @@
-export function getPublicApiBaseUrl() {
-  return (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1").replace(
-    /\/+$/,
-    "",
-  );
-}
+import { buildBackendApiUrl } from "@/lib/api/backend";
 
+// Unauthenticated GET for public catalog data (products, accessories, reviews).
+// Never attach credentials here.
 export async function apiGetPublic<T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
-  const baseUrl = getPublicApiBaseUrl();
-  const res = await fetch(`${baseUrl}${path}`, {
+  const res = await fetch(buildBackendApiUrl(path), {
     ...init,
     headers: {
       Accept: "application/json",

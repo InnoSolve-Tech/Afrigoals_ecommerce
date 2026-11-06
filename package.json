@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "biome check",
     "format": "biome format --write",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/backend-url.test.ts tests/public-catalog.test.ts tests/auth-protected.test.ts tests/auth-session.test.ts tests/guest-cart.test.ts"
   },
   "dependencies": {
     "@ai-sdk/cohere": "3.0.0-beta.44",
