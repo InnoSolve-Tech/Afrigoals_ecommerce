@@ -143,10 +143,10 @@ export function AdminRefundRequests<T>({
             {formatDate(item.createdAt, "datetime")}
           </p>
           <p className="break-all">
-            Original IOTEC transaction: {item.originalTransactionId}
+            IOTEC tracking reference: {item.originalTransactionId}
           </p>
           {item.receiptReference && (
-            <p>Customer receipt: {item.receiptReference}</p>
+            <p>Customer SMS transaction ID: {item.receiptReference}</p>
           )}
           <p className="whitespace-pre-wrap">Reason: {item.reason}</p>
           <p className="whitespace-pre-wrap text-muted-foreground">

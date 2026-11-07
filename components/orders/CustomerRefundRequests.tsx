@@ -166,7 +166,7 @@ export function CustomerRefundRequests({ orderId }: { orderId: string }) {
           )}
           <p>Original payer: {item.maskedPhone}</p>
           {item.receiptReference && (
-            <p>Your receipt reference: {item.receiptReference}</p>
+            <p>Your SMS transaction ID: {item.receiptReference}</p>
           )}
           {item.reviewNote && (
             <p className="whitespace-pre-wrap rounded-md bg-muted p-3">
@@ -199,7 +199,7 @@ export function CustomerRefundRequests({ orderId }: { orderId: string }) {
             order or send money automatically.
           </p>
           <label className="block text-sm">
-            Original IOTEC transaction
+            Payment for this order
             <select
               required
               className={field}
@@ -213,7 +213,7 @@ export function CustomerRefundRequests({ orderId }: { orderId: string }) {
                   value={payment.transactionId}
                   key={payment.transactionId}
                 >
-                  {payment.transactionId} · up to{" "}
+                  {payment.maskedPhone || "Verified payment"} · up to{" "}
                   {formatPrice(payment.available, "ugx")}
                 </option>
               ))}
@@ -264,10 +264,11 @@ export function CustomerRefundRequests({ orderId }: { orderId: string }) {
               />
             </label>
             <label className="text-sm">
-              Mobile money receipt reference (optional)
+              Transaction ID from your payment SMS (required)
               <input
                 maxLength={150}
-                placeholder="Reference from your payment message"
+                required
+                placeholder="Enter the transaction ID received from MTN or Airtel"
                 className={field}
                 value={form.receiptReference}
                 onChange={(e) =>

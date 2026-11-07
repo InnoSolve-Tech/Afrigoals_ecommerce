@@ -20,6 +20,8 @@ type Refund = {
   settlementNotes: string;
   status: string;
   providerReference: string;
+  providerStatusCode?: string;
+  receiptReference?: string;
   failureReason: string;
   createdAt: string;
   verifiedAt?: string;
@@ -151,7 +153,7 @@ export default function RefundsPage() {
         <h2 className="text-lg font-semibold">Prepare a refund</h2>
         <div className="grid gap-4 md:grid-cols-2">
           <label>
-            Original IOTEC transaction ID
+            Transaction ID from customer’s payment SMS
             <input
               required
               className={field}
@@ -247,7 +249,7 @@ export default function RefundsPage() {
           disabled={busy}
           className="rounded-lg bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
         >
-          {busy ? "Workingâ€¦" : "Verify payment and prepare refund"}
+          {busy ? "Working…" : "Verify payment and prepare refund"}
         </button>
       </form>
       {review && (
@@ -261,15 +263,20 @@ export default function RefundsPage() {
               Order: <strong>{review.orderNumber}</strong>
             </div>
             <div>
-              Customer: {review.customerName} Â· {review.customerEmail}
+              Customer: {review.customerName} · {review.customerEmail}
             </div>
             <div>Mobile money: {review.maskedPhone}</div>
-            <div>Original transaction: {review.originalTransactionId}</div>
+            <div>
+              SMS transaction ID:{" "}
+              {review.receiptReference ||
+                "Not supplied — prepare a new draft with the customer’s SMS ID"}
+              <p>IOTEC tracking reference: {review.originalTransactionId}</p>
+            </div>
             <div>
               Refund: <strong>{formatPrice(review.amount, "ugx")}</strong>
             </div>
             <div>Reason: {review.reason}</div>
-            <div>Settlement: {review.settlementNotes || "â€”"}</div>
+            <div>Settlement: {review.settlementNotes || "—"}</div>
           </dl>
           <p className="text-sm">
             Sending a cancellation refund cancels the order and restores
@@ -291,7 +298,7 @@ export default function RefundsPage() {
           </label>
           <div className="flex flex-wrap gap-3">
             <button
-              disabled={busy || !confirmed}
+              disabled={busy || !confirmed || !review.receiptReference}
               onClick={() => void act(review, "submit")}
               className="rounded-lg bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
             >
@@ -370,7 +377,12 @@ export default function RefundsPage() {
                     <p>{row.maskedPhone}</p>
                   </td>
                   <td className="max-w-64 break-all p-3">
-                    <p>Payment: {row.originalTransactionId}</p>
+                    <p>
+                      SMS ID: {row.receiptReference || "Legacy record"}
+                      <span className="block">
+                        IOTEC payment: {row.originalTransactionId}
+                      </span>
+                    </p>
                     <p>
                       Refund:{" "}
                       {row.providerReference ||
@@ -394,7 +406,14 @@ export default function RefundsPage() {
                     >
                       {row.status === "succeeded" ? "Refund paid" : row.status}
                     </p>
-                    <p className="mt-2 max-w-60 text-xs">{row.failureReason}</p>
+                    <p className="mt-2 max-w-60 text-xs">
+                      {row.failureReason}
+                      {row.providerStatusCode && (
+                        <span className="block">
+                          Provider code: {row.providerStatusCode}
+                        </span>
+                      )}
+                    </p>
                   </td>
                   <td className="max-w-72 whitespace-pre-wrap p-3">
                     <p>
