@@ -1,24 +1,27 @@
-import { NextResponse } from "next/server";
 import { authedFetch } from "@/lib/api/proxy";
-
+import {
+  deliveryPricingProxyResponse,
+  deliveryPricingUnavailable,
+} from "@/lib/api/delivery-pricing-response";
 export async function GET() {
-  const response = await authedFetch("/admin/delivery-pricing");
-  return new NextResponse(await response.text(), {
-    status: response.status,
-    headers: {
-      "Content-Type": "application/json",
-      "Cache-Control": "no-store",
-    },
-  });
+  try {
+    return await deliveryPricingProxyResponse(
+      await authedFetch("/admin/delivery-pricing"),
+    );
+  } catch {
+    return deliveryPricingUnavailable();
+  }
 }
 export async function PUT(request: Request) {
-  const response = await authedFetch("/admin/delivery-pricing", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: await request.text(),
-  });
-  return new NextResponse(await response.text(), {
-    status: response.status,
-    headers: { "Content-Type": "application/json" },
-  });
+  try {
+    return await deliveryPricingProxyResponse(
+      await authedFetch("/admin/delivery-pricing", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: await request.text(),
+      }),
+    );
+  } catch {
+    return deliveryPricingUnavailable();
+  }
 }

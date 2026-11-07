@@ -52,3 +52,10 @@ Check `https://API_DOMAIN/health` and `https://STORE_DOMAIN/api/health`, then
 verify cross-account order access is denied and rider payouts match commission.
 Keep the prior images available for rollback. Roll application images back
 without dropping database tables or deleting customer/payment records.
+
+
+## Delivery pricing route troubleshooting
+
+The storefront's /api/admin/delivery-pricing proxies GET/PUT to the runtime AFRIGOALS_API_URL plus /api/v1/admin/delivery-pricing. AFRIGOALS_API_URL must identify the ecommerce API service; a local .env.local value does not configure the deployed frontend. For the supplied Compose stack, web uses http://api:8080 and the backend prefix is appended automatically.
+
+An unauthenticated GET to the correct API endpoint should return JSON 401, not plain text Cannot GET. Check the specific API address used by the running storefront, not only the public API domain. A plain-text 404 can indicate a different upstream service, an old API image or reverse-proxy routing. Rebuild/restart the ecommerce API from the current repository and recreate the frontend when its runtime API origin changes. Do not reset the database or replace server secrets. Review running container configuration and logs through the owner's authenticated Contabo session before changing a live deployment.

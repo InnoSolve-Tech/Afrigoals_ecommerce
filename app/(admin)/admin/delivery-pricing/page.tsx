@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { readDeliveryPricing } from "@/lib/api/read-delivery-pricing";
 
 const fields = [
   ["originLat", "Shop latitude"],
@@ -38,9 +39,7 @@ export default function DeliveryPricingPage() {
       const response = await fetch("/api/admin/delivery-pricing", {
         cache: "no-store",
       });
-      const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.error || "Could not load delivery pricing");
+      const data = await readDeliveryPricing(response);
       setSettings(data);
     } catch (cause) {
       setError(
@@ -65,9 +64,7 @@ export default function DeliveryPricingPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(settings),
       });
-      const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.error || "Could not save delivery pricing");
+      const data = await readDeliveryPricing(response);
       setSettings(data);
       setMessage(
         "Delivery pricing saved. New quotes and orders now use these settings.",
@@ -218,7 +215,7 @@ export default function DeliveryPricingPage() {
               ))}
             </div>
             <Button type="submit">
-              {saving ? "Saving…" : "Save delivery pricing"}
+              {saving ? "Savingâ€¦" : "Save delivery pricing"}
             </Button>
           </fieldset>
         </form>

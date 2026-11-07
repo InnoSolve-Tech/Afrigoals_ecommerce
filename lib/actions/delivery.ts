@@ -9,6 +9,7 @@ export interface DeliveryQuoteResult {
   distanceMeters?: number;
   currency?: "UGX";
   error?: string;
+  errorCode?: string;
 }
 
 export async function getDeliveryQuote(input: {
@@ -30,16 +31,32 @@ export async function getDeliveryQuote(input: {
       body: JSON.stringify(input),
       cache: "no-store",
     });
-    const data = await response.json();
+    const data = await response.json().catch(() => null);
+    if (!data || typeof data !== "object")
+      return {
+        success: false,
+        error:
+          "Delivery pricing returned an unexpected response. Please try again.",
+        errorCode: "invalid_delivery_response",
+      };
     if (!response.ok)
       return {
         success: false,
-        error: data.error || "Could not calculate delivery",
+        error:
+          typeof data.error === "string"
+            ? data.error
+            : "Could not calculate delivery",
+        errorCode:
+          typeof data.code === "string"
+            ? data.code
+            : "delivery_quote_unavailable",
       };
     if (
       !Number.isFinite(data.fee) ||
       data.fee < 0 ||
-      !Number.isFinite(data.distanceKm)
+      !Number.isFinite(data.distanceKm) ||
+      data.distanceKm < 0 ||
+      (data.currency !== undefined && data.currency !== "UGX")
     ) {
       return { success: false, error: "Invalid delivery quote" };
     }
