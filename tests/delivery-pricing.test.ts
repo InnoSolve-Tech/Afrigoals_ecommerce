@@ -68,3 +68,91 @@ test("admin pricing proxy rejects guests without calling the API", async () => {
   );
   assert.equal(calls.length, 0);
 });
+
+test("missing upstream delivery route returns valid JSON with an actionable error", async () => {
+  setRequestCookies({ [AUTH_COOKIE_NAME]: "admin-token" });
+  const calls = mockFetch(
+    () =>
+      new Response("Cannot GET /api/v1/admin/delivery-pricing", {
+        status: 404,
+      }),
+  );
+  const response = await GET();
+  const body = await response.json();
+  assert.equal(response.status, 404);
+  assert.equal(body.code, "delivery_pricing_route_missing");
+  assert.match(body.error, /deployment/);
+  assert.equal(
+    calls[0].url,
+    "https://api.afrigoals-store.com/api/v1/admin/delivery-pricing",
+  );
+});
+
+test("delivery save handles a non-JSON backend error without losing its status", async () => {
+  setRequestCookies({ [AUTH_COOKIE_NAME]: "admin-token" });
+  mockFetch(() => new Response("Bad Gateway", { status: 502 }));
+  const response = await PUT(
+    new Request("http://localhost/api/admin/delivery-pricing", {
+      method: "PUT",
+      body: "{}",
+    }),
+  );
+  assert.equal(response.status, 502);
+  assert.equal((await response.json()).code, "invalid_upstream_response");
+});
+
+test("malformed success and unreachable API do not create fake delivery settings", async () => {
+  setRequestCookies({ [AUTH_COOKIE_NAME]: "admin-token" });
+  mockFetch(() => new Response("<html>Wrong service</html>", { status: 200 }));
+  assert.equal((await GET()).status, 502);
+  mockFetch(() => {
+    throw new Error("unreachable");
+  });
+  assert.equal((await GET()).status, 502);
+});
+
+test("delivery page rejects text responses and incomplete settings safely", async () => {
+  const { readDeliveryPricing } = await import(
+    "../lib/api/read-delivery-pricing"
+  );
+  await assert.rejects(
+    readDeliveryPricing(new Response("Cannot GET", { status: 404 })),
+    /deployment/,
+  );
+  await assert.rejects(
+    readDeliveryPricing(json({})),
+    /incomplete delivery settings/,
+  );
+  const settings = {
+    mode: "flat",
+    flatFee: 300,
+    serviceFeeRate: 0.15,
+    pricing: { baseFee: 300 },
+  };
+  assert.deepEqual(await readDeliveryPricing(json(settings)), settings);
+});
+
+test("checkout retains the API diagnostic code for failed production routing", async () => {
+  mockFetch(() =>
+    json(
+      {
+        error: "Could not calculate delivery for this location",
+        code: "maps_routes_api_disabled",
+      },
+      503,
+    ),
+  );
+  const result = await getDeliveryQuote({ lat: 0.333, lng: 32.568 });
+  assert.equal(result.success, false);
+  assert.equal(result.errorCode, "maps_routes_api_disabled");
+});
+
+test("checkout handles missing quote routes without a JSON parsing crash", async () => {
+  mockFetch(
+    () => new Response("Cannot POST /api/v1/delivery/quote", { status: 404 }),
+  );
+  const result = await getDeliveryQuote({ lat: 0.333, lng: 32.568 });
+  assert.equal(result.success, false);
+  assert.equal(result.errorCode, "invalid_delivery_response");
+  assert.doesNotMatch(result.error ?? "", /Unexpected token/);
+});
