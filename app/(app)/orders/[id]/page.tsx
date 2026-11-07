@@ -14,6 +14,7 @@ import { authedFetch } from "@/lib/api/proxy";
 import type { ApiOrder } from "@/lib/api/types";
 import { formatOrderStatus } from "@/lib/orders/status";
 import { formatDate, formatPrice } from "@/lib/utils";
+import { CustomerRefundRequests } from "@/components/orders/CustomerRefundRequests";
 import { OrderDeliveryContactEditor } from "../orderDeliveryContactEditor";
 
 export const metadata = {
@@ -780,6 +781,7 @@ export default async function OrderDetailPage({
         />
 
         <OrderProgressTracker status={order.status} />
+        <CustomerRefundRequests orderId={order.id} />
 
         <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
           <h2 className="mb-6 text-lg font-semibold text-zinc-900 dark:text-zinc-100">

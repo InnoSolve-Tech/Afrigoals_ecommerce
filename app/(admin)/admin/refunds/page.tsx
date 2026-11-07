@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AdminRefundRequests } from "@/components/admin/AdminRefundRequests";
 import { useCallback, useEffect, useState } from "react";
 import { formatDate, formatPrice } from "@/lib/utils";
 
@@ -139,6 +140,13 @@ export default function RefundsPage() {
           {message}
         </p>
       )}
+      <AdminRefundRequests<Refund>
+        onApproved={(refund) => {
+          setReview(refund);
+          setConfirmed(false);
+          void load();
+        }}
+      />
       <form onSubmit={prepare} className="space-y-4 rounded-xl border p-5">
         <h2 className="text-lg font-semibold">Prepare a refund</h2>
         <div className="grid gap-4 md:grid-cols-2">

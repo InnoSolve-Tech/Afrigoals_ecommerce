@@ -49,3 +49,31 @@ test("refund results remain separate from original verified payment", () => {
   );
   assert.equal(formatOrderPayment(order), "Paid");
 });
+
+test("customer refund status distinguishes review, approval and verified payment", async () => {
+  const { refundRequestLabel } = await import("../lib/orders/refund-requests");
+  assert.equal(
+    refundRequestLabel({ status: "requested", refundStatus: "" }),
+    "Awaiting admin review",
+  );
+  assert.equal(
+    refundRequestLabel({ status: "declined", refundStatus: "" }),
+    "Request declined",
+  );
+  assert.equal(
+    refundRequestLabel({ status: "approved", refundStatus: "draft" }),
+    "Approved · awaiting refund submission",
+  );
+  assert.equal(
+    refundRequestLabel({ status: "approved", refundStatus: "processing" }),
+    "Approved · awaiting refund confirmation",
+  );
+  assert.equal(
+    refundRequestLabel({ status: "approved", refundStatus: "succeeded" }),
+    "Refund paid",
+  );
+  assert.equal(
+    refundRequestLabel({ status: "approved", refundStatus: "failed" }),
+    "Approved · payment needs attention",
+  );
+});

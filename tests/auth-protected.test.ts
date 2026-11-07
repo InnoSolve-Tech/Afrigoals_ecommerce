@@ -7,7 +7,7 @@ import { AUTH_COOKIE_NAME } from "../lib/auth/constants";
 import { createCashOnDeliveryOrder } from "../lib/actions/create-cash-on-delivery-order";
 import { createCheckoutSession } from "../lib/actions/checkout";
 import { authedFetch, authedFetchWithToken } from "../lib/api/proxy";
-import { headerValue, mockFetch, setRequestCookies } from "./helpers";
+import { headerValue, json, mockFetch, setRequestCookies } from "./helpers";
 
 const ORIGIN = "https://api.afrigoals-store.com";
 const BASE = `${ORIGIN}/api/v1`;
@@ -197,4 +197,19 @@ test("failed order creation never starts an IOTEC collection", async () => {
   assert.equal(result.success, false);
   assert.equal(result.error, "Delivery quote unavailable");
   assert.equal(calls.length, 1);
+});
+
+test("guest refund requests cannot reach the backend", async () => {
+  setRequestCookies({});
+  const route = await import("../app/api/orders/[id]/refund-requests/route");
+  const calls = mockFetch(() => json({}));
+  const request = new Request(
+    "http://localhost/api/orders/o1/refund-requests",
+    { method: "POST", body: JSON.stringify({ amount: 800 }) },
+  );
+  const response = await route.POST(request, {
+    params: Promise.resolve({ id: "o1" }),
+  });
+  assert.equal(response.status, 401);
+  assert.equal(calls.length, 0);
 });
