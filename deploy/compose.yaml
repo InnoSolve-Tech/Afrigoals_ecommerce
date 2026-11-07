@@ -1,0 +1,55 @@
+name: afrigoals-ecommerce
+services:
+  api:
+    build: ../../Afrigoals_ecommerce_api
+    restart: unless-stopped
+    env_file: ${API_ENV_FILE:-./api.env}
+    environment:
+      APP_ENV: production
+      PORT: 8080
+      DB_DRIVER: postgres
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/health]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 180s
+  web:
+    build:
+      context: ..
+      args:
+        NEXT_PUBLIC_API_URL: https://${API_DOMAIN:?Set API_DOMAIN}
+        NEXT_PUBLIC_GOOGLE_MAPS_API: ${NEXT_PUBLIC_GOOGLE_MAPS_API:-}
+        NEXT_PUBLIC_GOOGLE_MAP_ID: ${NEXT_PUBLIC_GOOGLE_MAP_ID:-}
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
+        NEXT_PUBLIC_MOBILE_MONEY_ENABLED: 'true'
+    restart: unless-stopped
+    env_file: ${WEB_ENV_FILE:-./web.env}
+    environment:
+      AFRIGOALS_API_URL: http://api:8080
+      NODE_ENV: production
+    depends_on:
+      api: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ['80:80', '443:443', '443:443/udp']
+    environment:
+      STORE_DOMAIN: ${STORE_DOMAIN:?Set STORE_DOMAIN}
+      API_DOMAIN: ${API_DOMAIN:?Set API_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web: {condition: service_healthy}
+volumes:
+  caddy_data:
+  caddy_config:

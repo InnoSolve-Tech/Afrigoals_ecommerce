@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { logoutSession, subscribeAuthChanges } from "@/lib/auth/events";
 
 export type AuthUser = {
   id: string;
   email: string;
   name?: string;
-  role: "admin" | "user";
+  role: "admin" | "user" | "vendor";
   emailVerified?: boolean;
 };
 
@@ -20,11 +21,13 @@ function normalizeUser(data: any): AuthUser | null {
 
   const id = String(data.id || "").trim();
   const email = String(data.email || "").trim();
-  const role = String(data.role || "").trim().toLowerCase();
+  const role = String(data.role || "")
+    .trim()
+    .toLowerCase();
 
   if (!id || !email) return null;
 
-  if (role !== "admin" && role !== "user") {
+  if (role !== "admin" && role !== "user" && role !== "vendor") {
     return null;
   }
 
@@ -44,7 +47,9 @@ export function useAuthState() {
     user: null,
   });
 
+  const requestVersion = useRef(0);
   const refresh = useCallback(async () => {
+    const version = ++requestVersion.current;
     try {
       const res = await fetch("/api/auth/me", {
         method: "GET",
@@ -52,6 +57,7 @@ export function useAuthState() {
         credentials: "same-origin",
       });
 
+      if (version !== requestVersion.current) return;
       if (!res.ok) {
         setState({
           status: "signed_out",
@@ -61,6 +67,7 @@ export function useAuthState() {
       }
 
       const data = await res.json().catch(() => null);
+      if (version !== requestVersion.current) return;
       const user = normalizeUser(data);
 
       if (!user) {
@@ -76,6 +83,7 @@ export function useAuthState() {
         user,
       });
     } catch {
+      if (version !== requestVersion.current) return;
       setState({
         status: "signed_out",
         user: null,
@@ -84,26 +92,28 @@ export function useAuthState() {
   }, []);
 
   const signOut = useCallback(async () => {
-    try {
-      await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "same-origin",
-      });
-    } finally {
-      setState({
-        status: "signed_out",
-        user: null,
-      });
-
-      window.dispatchEvent(new Event("auth-changed"));
-    }
+    ++requestVersion.current;
+    await logoutSession();
+    setState({ status: "signed_out", user: null });
   }, []);
 
   useEffect(() => {
     refresh();
 
-    function handleAuthChanged() {
-      refresh();
+    const unsubscribe = subscribeAuthChanges((change) => {
+      if (change === "signed_out") {
+        ++requestVersion.current;
+        setState({ status: "signed_out", user: null });
+      } else {
+        setState({ status: "loading", user: null });
+        refresh();
+      }
+    });
+    function handlePageShow(event: PageTransitionEvent) {
+      if (event.persisted) {
+        setState({ status: "loading", user: null });
+        refresh();
+      }
     }
 
     function handleVisibilityChange() {
@@ -112,11 +122,12 @@ export function useAuthState() {
       }
     }
 
-    window.addEventListener("auth-changed", handleAuthChanged);
+    window.addEventListener("pageshow", handlePageShow);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      window.removeEventListener("auth-changed", handleAuthChanged);
+      unsubscribe();
+      window.removeEventListener("pageshow", handlePageShow);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [refresh]);

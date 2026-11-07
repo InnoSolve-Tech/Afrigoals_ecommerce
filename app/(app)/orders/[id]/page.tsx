@@ -80,6 +80,8 @@ type FlexibleOrderItem = ApiOrder["items"][number] & {
 
 type FlexibleApiOrder = ApiOrder & {
   paymentStatus?: string;
+  refundedAmount?: number;
+  refundPendingAmount?: number;
   payment_status?: string;
 };
 
@@ -1042,6 +1044,20 @@ export default async function OrderDetailPage({
               </h2>
             </div>
 
+            {(order.refundedAmount ?? 0) > 0 && (
+              <p className="mt-4 rounded-lg border p-3 text-sm">
+                Refund paid: {formatPrice(order.refundedAmount ?? 0, "ugx")}.{" "}
+                {Number(order.refundedAmount) >= Number(order.total)
+                  ? "Full refund confirmed."
+                  : "Partial refund confirmed."}
+              </p>
+            )}
+            {(order.refundPendingAmount ?? 0) > 0 && (
+              <p className="mt-4 rounded-lg border p-3 text-sm">
+                Refund under review or awaiting payment confirmation:{" "}
+                {formatPrice(order.refundPendingAmount ?? 0, "ugx")}.
+              </p>
+            )}
             <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
               <div className="flex items-center justify-between gap-4 sm:block">
                 <span className="text-xs font-light tracking-wide text-zinc-500 dark:text-zinc-400">

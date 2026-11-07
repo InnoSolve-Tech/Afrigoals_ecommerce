@@ -1,0 +1,11 @@
+{
+    email {$ACME_EMAIL}
+}
+{$STORE_DOMAIN} {
+    encode zstd gzip
+    reverse_proxy web:3000
+}
+{$API_DOMAIN} {
+    encode zstd gzip
+    reverse_proxy api:8080
+}

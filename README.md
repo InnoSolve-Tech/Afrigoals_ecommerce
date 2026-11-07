@@ -1,3 +1,8 @@
+> **Current payments:** IOTEC mobile money (MTN / Airtel) and cash on delivery.
+> Pesapal checkout, callbacks and IPN registration are retired (HTTP 410).
+> See [IOTEC setup](docs/iotec-payments.md) for the current configuration.
+> Pesapal references in the original template documentation below are historical.
+
 <!-- Badges -->
 <div align="center">
 

@@ -19,10 +19,12 @@ export const metadata = {
 
 export default async function MobileMoneyPayPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ start?: string }>;
 }) {
-  const { id } = await params;
+  const [{ id }, { start }] = await Promise.all([params, searchParams]);
 
   const res = await authedFetch(`/orders/${encodeURIComponent(id)}`);
 
@@ -52,6 +54,7 @@ export default async function MobileMoneyPayPage({
         total={order.total}
         currency={order.currency || "UGX"}
         initialPhone={order.deliveryContactPhone || ""}
+        paymentStartFailed={start === "failed"}
       />
     </div>
   );

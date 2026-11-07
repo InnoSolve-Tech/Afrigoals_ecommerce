@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { AUTH_COOKIE_NAME } from "@/lib/auth/constants";
 
 export async function POST() {
-  const response = NextResponse.json({ ok: true });
+  const response = NextResponse.json(
+    { ok: true },
+    { headers: { "Cache-Control": "no-store, private" } },
+  );
   response.cookies.set(AUTH_COOKIE_NAME, "", {
     httpOnly: true,
     sameSite: "lax",

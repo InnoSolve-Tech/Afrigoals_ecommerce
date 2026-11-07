@@ -1,0 +1,17 @@
+---------------------------
+failed to receive message
+
+Caused by:
+- reading packet length
+- An existing connection was forcibly closed by the remote host. (os error 10054)
+
+Debug info:
+- Execution of get_all_written_entrypoints_with_issues_operation failed
+- Execution of PlainIssue::from_issue failed
+- Execution of PlainSource::from_source failed
+- Execution of <WebpackLoadersProcessedAsset as Asset>::content failed
+- Execution of WebpackLoadersProcessedAsset::process failed
+- Execution of evaluate_webpack_loader failed
+- failed to receive message
+- reading packet length
+- An existing connection was forcibly closed by the remote host. (os error 10054)

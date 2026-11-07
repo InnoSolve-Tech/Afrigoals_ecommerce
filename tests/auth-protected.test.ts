@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { afterEach, mock, test } from "node:test";
 import { POST as postMobileMoney } from "../app/api/orders/[id]/payments/mobile-money/route";
 import { GET as getMyOrders, POST as postOrder } from "../app/api/orders/route";
+import { AUTH_COOKIE_NAME } from "../lib/auth/constants";
+import { createCashOnDeliveryOrder } from "../lib/actions/create-cash-on-delivery-order";
 import { createCheckoutSession } from "../lib/actions/checkout";
 import { authedFetch, authedFetchWithToken } from "../lib/api/proxy";
 import { headerValue, mockFetch, setRequestCookies } from "./helpers";
@@ -84,7 +86,7 @@ test("POST mobile-money payment for a guest is rejected", async () => {
 });
 
 test("signed-in customer order request is forwarded with the session token", async () => {
-  setRequestCookies({ afrigoals_token: "customer-token" });
+  setRequestCookies({ [AUTH_COOKIE_NAME]: "customer-token" });
   const calls = mockFetch(() => new Response("[]", { status: 200 }));
 
   const res = await getMyOrders();
@@ -115,4 +117,84 @@ test("checkout submission requires sign-in and does not call the backend as a gu
   assert.equal(result.success, false);
   assert.equal(result.url, "/signin?next=/checkout");
   assert.equal(calls.length, 0);
+});
+
+test("online checkout creates an IOTEC order and starts collection without a gateway redirect", async () => {
+  setRequestCookies({ [AUTH_COOKIE_NAME]: "customer-token" });
+  const calls = mockFetch((url) => {
+    if (url === `${BASE}/orders`)
+      return new Response(JSON.stringify({ id: "o1", orderNumber: "AFG-1" }), {
+        status: 201,
+      });
+    if (url === `${BASE}/orders/o1/payments/mobile-money`)
+      return new Response(JSON.stringify({ status: "processing" }), {
+        status: 202,
+      });
+    throw new Error(`Unexpected checkout URL: ${url}`);
+  });
+  const result = await createCheckoutSession(
+    [{ productId: "p1", name: "Kit", price: 1000, quantity: 1 }],
+    {
+      address: "Kampala",
+      lat: 0.3,
+      lng: 32.5,
+      contactName: "Customer",
+      contactPhone: "+256771234567",
+    },
+  );
+  assert.equal(result.success, true);
+  assert.equal(result.url, "/orders/o1/pay");
+  assert.equal(calls.length, 2);
+  assert.equal(
+    JSON.parse(String(calls[0].init?.body)).paymentMethod,
+    "mobile_money",
+  );
+  assert.equal(JSON.parse(String(calls[1].init?.body)).phone, "+256771234567");
+});
+
+test("cash on delivery creates an order without starting an IOTEC collection", async () => {
+  setRequestCookies({ [AUTH_COOKIE_NAME]: "customer-token" });
+  const calls = mockFetch(
+    () => new Response(JSON.stringify({ id: "cod-1" }), { status: 201 }),
+  );
+  const result = await createCashOnDeliveryOrder(
+    [{ productId: "p1", name: "Kit", price: 1000, quantity: 1 }],
+    {
+      address: "Kampala",
+      lat: 0.3,
+      lng: 32.5,
+      fee: 0,
+      distanceKm: 0,
+      contactName: "Customer",
+      contactPhone: "+256771234567",
+    },
+    "cod",
+  );
+  assert.equal(result.success, true);
+  assert.equal(result.url, "/orders/cod-1?payment=cod");
+  assert.equal(calls.length, 1);
+  assert.equal(JSON.parse(String(calls[0].init?.body)).paymentMethod, "cod");
+});
+
+test("failed order creation never starts an IOTEC collection", async () => {
+  setRequestCookies({ [AUTH_COOKIE_NAME]: "customer-token" });
+  const calls = mockFetch(
+    () =>
+      new Response(JSON.stringify({ error: "Delivery quote unavailable" }), {
+        status: 503,
+      }),
+  );
+  const result = await createCheckoutSession(
+    [{ productId: "p1", name: "Kit", price: 1000, quantity: 1 }],
+    {
+      address: "Kampala",
+      lat: 0.3,
+      lng: 32.5,
+      contactName: "Customer",
+      contactPhone: "+256771234567",
+    },
+  );
+  assert.equal(result.success, false);
+  assert.equal(result.error, "Delivery quote unavailable");
+  assert.equal(calls.length, 1);
 });

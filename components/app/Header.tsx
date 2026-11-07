@@ -19,6 +19,7 @@ import { useTotalItems } from "@/lib/store/cart-store-provider";
 import { useChatActions, useIsChatOpen } from "@/lib/store/chat-store-provider";
 
 const navLinks = [
+  { label: "Partner stores", href: "/partner-stores" },
   { label: "Browse All", href: "/products" },
   { label: "Jerseys", href: "/products?category=jerseys" },
   { label: "Shoes", href: "/products?category=shoes" },

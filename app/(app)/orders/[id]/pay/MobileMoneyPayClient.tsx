@@ -28,6 +28,7 @@ interface MobileMoneyPayClientProps {
   total: number;
   currency: string;
   initialPhone: string;
+  paymentStartFailed?: boolean;
 }
 
 const POLL_INTERVAL_MS = 4000;
@@ -37,12 +38,34 @@ function isInFlight(status: AttemptStatus) {
   return status === "pending" || status === "processing";
 }
 
+function takeSavedPayerPhone(orderId: string) {
+  try {
+    const key = `afrigoals-iotec-payer-${orderId}`;
+    const phone = window.sessionStorage.getItem(key);
+    if (phone) {
+      window.sessionStorage.removeItem(key);
+    }
+    return phone;
+  } catch {
+    return null;
+  }
+}
+
+function savePayerPhone(orderId: string, phone: string) {
+  try {
+    window.sessionStorage.setItem(`afrigoals-iotec-payer-${orderId}`, phone);
+  } catch {
+    // Payment initiation does not depend on browser storage.
+  }
+}
+
 export function MobileMoneyPayClient({
   orderId,
   orderNumber,
   total,
   currency,
   initialPhone,
+  paymentStartFailed = false,
 }: MobileMoneyPayClientProps) {
   const router = useRouter();
   const [phone, setPhone] = useState(initialPhone);
@@ -90,6 +113,11 @@ export function MobileMoneyPayClient({
 
     (async () => {
       try {
+        const savedPayerPhone = takeSavedPayerPhone(orderId);
+        if (savedPayerPhone) {
+          setPhone(savedPayerPhone);
+        }
+
         const data = await fetchStatus();
         if (!cancelled) applyAttempt(data);
       } catch (err) {
@@ -106,7 +134,7 @@ export function MobileMoneyPayClient({
     return () => {
       cancelled = true;
     };
-  }, [fetchStatus, applyAttempt]);
+  }, [fetchStatus, applyAttempt, orderId]);
 
   // Poll the server while a collection is awaiting approval. The server re-checks
   // with ioTec, so the browser never decides that a payment succeeded.
@@ -152,6 +180,7 @@ export function MobileMoneyPayClient({
 
     setSubmitting(true);
     try {
+      savePayerPhone(orderId, cleaned);
       const res = await fetch(
         `/api/orders/${encodeURIComponent(orderId)}/payments/mobile-money`,
         {
@@ -173,6 +202,9 @@ export function MobileMoneyPayClient({
       }
 
       applyAttempt(data);
+      if (!isInFlight(data.status)) {
+        takeSavedPayerPhone(orderId);
+      }
     } catch {
       setError(
         "Could not reach the server. Check your connection and try again.",
@@ -277,6 +309,13 @@ export function MobileMoneyPayClient({
             No money was taken. You can try again below.
           </p>
         </div>
+      ) : null}
+
+      {paymentStartFailed && attempt.status === "none" ? (
+        <p className="text-sm text-red-600 dark:text-red-400">
+          We could not send the payment prompt. Check the payer number and try
+          again.
+        </p>
       ) : null}
 
       {!isInFlight(attempt.status) ? (

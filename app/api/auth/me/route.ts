@@ -24,5 +24,7 @@ export async function GET(req: Request) {
   }
 
   const data = await res.json().catch(() => null);
-  return NextResponse.json(data);
+  return NextResponse.json(data, {
+    headers: { "Cache-Control": "no-store, private" },
+  });
 }

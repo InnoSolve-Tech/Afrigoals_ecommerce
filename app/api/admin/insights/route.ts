@@ -3,7 +3,9 @@ import { authedFetch } from "@/lib/api/proxy";
 import type { ApiOrder } from "@/lib/api/types";
 
 function normalizeStatus(status?: string) {
-  return String(status || "").trim().toLowerCase();
+  return String(status || "")
+    .trim()
+    .toLowerCase();
 }
 
 function isCancelled(order: ApiOrder) {
@@ -13,7 +15,7 @@ function isCancelled(order: ApiOrder) {
 
 /**
  * An order counts as revenue once its payment is collected. Payment status is
- * the source of truth: Pesapal sets "paid" on success, and an admin sets it when
+ * the source of truth: IOTEC verification sets "paid" on success, and an admin sets it when
  * cash is collected for cash-on-delivery orders. Order status is not used,
  * because a "confirmed" COD order has not been paid yet.
  */

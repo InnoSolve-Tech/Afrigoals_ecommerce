@@ -19,22 +19,14 @@ interface SuccessPageProps {
 export default async function SuccessPage({ searchParams }: SuccessPageProps) {
   const params = await searchParams;
   const sessionId = params.session_id ?? null;
-  const paymentMethod = params.paymentMethod ?? "pesapal";
+  const paymentMethod = params.paymentMethod ?? "mobile_money";
   const orderNumber = params.orderNumber ?? params.order ?? null;
 
   if (
-    (paymentMethod === "cod" || paymentMethod === "mobile_money") &&
+    (paymentMethod !== "cod" && paymentMethod !== "mobile_money") ||
     !orderNumber
   ) {
-    redirect("/");
-  }
-
-  if (
-    paymentMethod !== "cod" &&
-    paymentMethod !== "mobile_money" &&
-    !sessionId
-  ) {
-    redirect("/");
+    redirect("/orders");
   }
 
   return (

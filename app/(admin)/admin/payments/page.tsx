@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { formatDate, formatPrice } from "@/lib/utils";
 
@@ -124,6 +125,12 @@ export default function AdminPaymentsPage() {
 
   return (
     <div className="space-y-6">
+      <Link
+        href="/admin/refunds"
+        className="inline-block rounded-lg border px-4 py-2 text-sm"
+      >
+        Refunds and returns
+      </Link>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
@@ -257,7 +264,7 @@ export default function AdminPaymentsPage() {
                     {formatPrice(row.amount, row.currency)}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs">
-                    {row.providerReference || "—"}
+                    {row.providerReference || "â€”"}
                   </td>
                   <td className="px-4 py-3">
                     <span
@@ -292,7 +299,7 @@ export default function AdminPaymentsPage() {
                       }
                       className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium disabled:opacity-40 dark:border-zinc-700"
                     >
-                      {busyId === row.id ? "Checking…" : "Recheck"}
+                      {busyId === row.id ? "Checkingâ€¦" : "Recheck"}
                     </button>
                   </td>
                 </tr>

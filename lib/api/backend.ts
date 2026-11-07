@@ -15,7 +15,12 @@ const DEFAULT_BACKEND_ORIGIN = "http://localhost:8080";
 
 type EnvLike = Partial<Record<string, string | undefined>>;
 
-export function getBackendApiBaseUrl(env: EnvLike = process.env): string {
+export function getBackendApiBaseUrl(
+  env: EnvLike = {
+    AFRIGOALS_API_URL: process.env.AFRIGOALS_API_URL,
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+  },
+): string {
   const raw = (
     env.AFRIGOALS_API_URL ||
     env.NEXT_PUBLIC_API_URL ||
@@ -33,7 +38,13 @@ export function getBackendApiBaseUrl(env: EnvLike = process.env): string {
 
 // Joins a path relative to the API prefix, e.g. "/products/1/accessories".
 // A leading "/api/v1" on the input is removed so it cannot be duplicated.
-export function buildBackendApiUrl(path: string, env: EnvLike = process.env) {
+export function buildBackendApiUrl(
+  path: string,
+  env: EnvLike = {
+    AFRIGOALS_API_URL: process.env.AFRIGOALS_API_URL,
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+  },
+) {
   let relative = path.startsWith("/") ? path : `/${path}`;
 
   if (

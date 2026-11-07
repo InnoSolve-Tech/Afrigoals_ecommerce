@@ -18,6 +18,7 @@ import { ProductGrid } from "@/components/app/ProductGrid";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCartRecommendations } from "@/lib/hooks/useCartRecommendations";
+import { StockVerificationNotice } from "@/components/app/StockVerificationNotice";
 import { useCartStock } from "@/lib/hooks/useCartStock";
 import {
   useCartItems,
@@ -155,7 +156,13 @@ export function CartPageClient() {
   const accessoriesTotal = getCartAccessoriesTotal(items);
   const cartSubtotal = productSubtotal + accessoriesTotal;
 
-  const { stockMap, isLoading, hasStockIssues } = useCartStock(rawItems);
+  const {
+    stockMap,
+    isLoading,
+    hasStockIssues,
+    error: stockError,
+    refetch: retryStock,
+  } = useCartStock(rawItems);
 
   const { products: recommendedProducts, isLoading: isLoadingRecommendations } =
     useCartRecommendations(rawItems);
@@ -321,6 +328,7 @@ export function CartPageClient() {
           </div>
         </div>
 
+        <StockVerificationNotice error={stockError} retry={retryStock} />
         {hasStockIssues && !isLoading ? (
           <div className="mb-6 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
             <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -338,7 +346,8 @@ export function CartPageClient() {
                   </h2>
 
                   <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                    Confirm quantities, customization, and stock before checkout.
+                    Confirm quantities, customization, and stock before
+                    checkout.
                   </p>
                 </div>
 
@@ -375,7 +384,8 @@ export function CartPageClient() {
                   </h2>
 
                   <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                    A few related picks to help fill out the page and the basket.
+                    A few related picks to help fill out the page and the
+                    basket.
                   </p>
                 </div>
 

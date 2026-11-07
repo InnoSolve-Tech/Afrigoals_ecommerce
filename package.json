@@ -9,7 +9,7 @@
     "lint": "biome check",
     "format": "biome format --write",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test tests/backend-url.test.ts tests/public-catalog.test.ts tests/auth-protected.test.ts tests/auth-session.test.ts tests/guest-cart.test.ts"
+    "test": "node --import tsx --test tests/backend-url.test.ts tests/public-catalog.test.ts tests/auth-protected.test.ts tests/auth-session.test.ts tests/guest-cart.test.ts tests/cart-stock.test.ts tests/delivery-pricing.test.ts tests/admin-insights.test.ts tests/shopping-tools.test.ts tests/commerce-growth.test.ts tests/order-payment-status.test.ts"
   },
   "dependencies": {
     "@ai-sdk/cohere": "3.0.0-beta.44",
@@ -38,7 +38,6 @@
     "lucide-react": "^0.556.0",
     "next": "16.2.1",
     "next-themes": "^0.4.6",
-    "pesapaljs-v3": "^1.0.13",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",

@@ -46,6 +46,13 @@ type RegisterRow = {
 };
 
 type Report = {
+  ordersTruncated?: boolean;
+  refunds?: {
+    collections: number;
+    refundsPaid: number;
+    refundsReserved: number;
+    netCollections: number;
+  };
   currency: string;
   serviceFeeRate: number;
   totals: {
@@ -122,6 +129,22 @@ export default function AdminReconciliationPage() {
   const register = report?.orders ?? [];
 
   const summaryCards: Array<[string, string]> = [
+    [
+      "Verified IOTEC collections",
+      formatPrice(report?.refunds?.collections ?? 0, currency),
+    ],
+    [
+      "Verified refunds paid",
+      formatPrice(report?.refunds?.refundsPaid ?? 0, currency),
+    ],
+    [
+      "Refunds reserved / pending",
+      formatPrice(report?.refunds?.refundsReserved ?? 0, currency),
+    ],
+    [
+      "IOTEC collections less refunds",
+      formatPrice(report?.refunds?.netCollections ?? 0, currency),
+    ],
     ["Paid orders", String(totals?.paidOrders ?? 0)],
     ["Product sales", formatPrice(totals?.productSales ?? 0, currency)],
     ["Delivery fees", formatPrice(totals?.deliveryFees ?? 0, currency)],
@@ -136,8 +159,14 @@ export default function AdminReconciliationPage() {
       "Unassigned delivery fees",
       formatPrice(totals?.unassignedDeliveryFees ?? 0, currency),
     ],
-    ["Outstanding cash on delivery", formatPrice(totals?.outstandingCod ?? 0, currency)],
-    ["Average order value", formatPrice(totals?.averageOrderValue ?? 0, currency)],
+    [
+      "Outstanding cash on delivery",
+      formatPrice(totals?.outstandingCod ?? 0, currency),
+    ],
+    [
+      "Average order value",
+      formatPrice(totals?.averageOrderValue ?? 0, currency),
+    ],
   ];
 
   return (
@@ -148,8 +177,13 @@ export default function AdminReconciliationPage() {
             Reconciliation
           </h1>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Paid orders matched to vendor sales, delivery fees, rider payouts and
-            Afrigoals&apos; commission. Cancelled orders are excluded.
+            Paid orders matched to vendor sales, delivery fees, rider payouts
+            and Afrigoals&apos; commission. Sales figures are gross and exclude
+            cancelled orders. IOTEC cash flow includes their collected payments
+            and subtracts verified refunds; it excludes provider fees and other
+            wallet movements. Cash flow uses verification dates; pending refunds
+            use draft dates. Partial settlements are recorded separately from
+            gross product sales.
           </p>
         </div>
 
@@ -380,6 +414,12 @@ export default function AdminReconciliationPage() {
           <h2 className="font-semibold text-zinc-900 dark:text-zinc-100">
             Paid order register
           </h2>
+          {report?.ordersTruncated && (
+            <p className="mt-2 text-sm text-amber-700">
+              Showing the latest 200 paid orders. Totals include the full
+              selected period; narrow the date range to inspect older orders.
+            </p>
+          )}
         </div>
         <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
           {loading ? (

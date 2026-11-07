@@ -1,9 +1,9 @@
 "use server";
 
 import { cookies } from "next/headers";
-import { AUTH_COOKIE_NAME } from "@/lib/auth/constants";
-import type { CartItemAccessory } from "@/lib/api/types";
 import { getBackendApiBaseUrl } from "@/lib/api/backend";
+import type { CartItemAccessory } from "@/lib/api/types";
+import { AUTH_COOKIE_NAME } from "@/lib/auth/constants";
 
 type CartItem = {
   productId: string;
@@ -40,16 +40,49 @@ type CreateCodOrderResult = {
   success: boolean;
   error?: string;
   url?: string;
+  orderId?: string;
 };
 
 type ApiOrderResponse = {
   id?: string;
   ID?: string;
+  orderId?: string;
+  order_id?: string;
   orderNumber?: string;
   order_number?: string;
+  order?: ApiOrderResponse;
+  data?: ApiOrderResponse;
   error?: string;
   message?: string;
 };
+
+function getOrderId(data: ApiOrderResponse): string {
+  const directId = data.orderId || data.order_id || data.id || data.ID;
+  if (directId?.trim()) {
+    return directId.trim();
+  }
+
+  if (data.order) {
+    const nestedId = getOrderId(data.order);
+    if (nestedId) return nestedId;
+  }
+
+  return data.data ? getOrderId(data.data) : "";
+}
+
+function getOrderNumber(data: ApiOrderResponse): string {
+  const directOrderNumber = data.orderNumber || data.order_number;
+  if (directOrderNumber?.trim()) {
+    return directOrderNumber.trim();
+  }
+
+  if (data.order) {
+    const nestedOrderNumber = getOrderNumber(data.order);
+    if (nestedOrderNumber) return nestedOrderNumber;
+  }
+
+  return data.data ? getOrderNumber(data.data) : "";
+}
 
 function cleanPhone(value: string | undefined): string {
   return String(value || "")
@@ -68,6 +101,11 @@ function nullableText(value?: string | null): string | null {
 
 function isValidPhone(value: string): boolean {
   return /^\+?[0-9]{7,15}$/.test(value);
+}
+
+function isValidUgandanMobilePhone(value: string): boolean {
+  const phone = value.replace(/[\s().-]/g, "");
+  return /^(?:\+?2567\d{8}|07\d{8}|7\d{8})$/.test(phone);
 }
 
 function isValidCoordinate(lat: number, lng: number): boolean {
@@ -173,6 +211,8 @@ export async function createCashOnDeliveryOrder(
   items: CartItem[],
   delivery: DeliveryDetails,
   paymentMethod: "cod" | "mobile_money" = "cod",
+  payerPhone?: string,
+  expectedTotal?: number,
 ): Promise<CreateCodOrderResult> {
   try {
     const cookieStore = await cookies();
@@ -257,6 +297,17 @@ export async function createCashOnDeliveryOrder(
       };
     }
 
+    const cleanedPayerPhone = cleanPhone(payerPhone);
+    if (
+      paymentMethod === "mobile_money" &&
+      !isValidUgandanMobilePhone(cleanedPayerPhone)
+    ) {
+      return {
+        success: false,
+        error: "Enter a valid Ugandan MTN or Airtel payer number.",
+      };
+    }
+
     const apiBaseUrl = getBackendApiBaseUrl();
 
     const payload = {
@@ -274,9 +325,8 @@ export async function createCashOnDeliveryOrder(
       deliveryNote: note,
 
       paymentMethod,
+      expectedTotal,
     };
-
-    console.log("COD ORDER PAYLOAD", JSON.stringify(payload, null, 2));
 
     const res = await fetch(`${apiBaseUrl}/orders`, {
       method: "POST",
@@ -301,15 +351,54 @@ export async function createCashOnDeliveryOrder(
       };
     }
 
-    const orderId = data.id || data.ID;
-    const orderNumber = data.orderNumber || data.order_number;
+    const orderId = getOrderId(data);
+    const orderNumber = getOrderNumber(data);
 
     if (paymentMethod === "mobile_money") {
+      if (!orderId) {
+        return {
+          success: false,
+          error:
+            "Order was created but the payment reference was not returned.",
+        };
+      }
+
+      let paymentStartFailed = false;
+      try {
+        const paymentRes = await fetch(
+          `${apiBaseUrl}/orders/${encodeURIComponent(orderId)}/payments/mobile-money`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ phone: cleanedPayerPhone }),
+            cache: "no-store",
+          },
+        );
+        paymentStartFailed = !paymentRes.ok;
+        if (!paymentRes.ok) {
+          console.error("IOTEC payment initiation failed", {
+            status: paymentRes.status,
+            orderId,
+          });
+        }
+      } catch (error) {
+        paymentStartFailed = true;
+        console.error("IOTEC payment initiation request failed", {
+          orderId,
+          error,
+        });
+      }
+
       return {
         success: true,
-        url: orderId
-          ? `/orders/${encodeURIComponent(orderId)}/pay`
-          : "/orders",
+        orderId,
+        url: `/orders/${encodeURIComponent(orderId)}/pay${
+          paymentStartFailed ? "?start=failed" : ""
+        }`,
       };
     }
 
@@ -326,7 +415,10 @@ export async function createCashOnDeliveryOrder(
 
     return {
       success: false,
-      error: "Unexpected error while creating cash on delivery order.",
+      error:
+        paymentMethod === "mobile_money"
+          ? "Unexpected error while starting IOTEC payment."
+          : "Unexpected error while creating cash on delivery order.",
     };
   }
 }

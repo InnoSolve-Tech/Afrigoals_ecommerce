@@ -6,3 +6,11 @@ node_modules
 !.env.example
 .vscode/
 .cursor/
+
+.cache/
+tmp/
+output/
+*.log
+deploy/*.env
+deploy/api.env
+deploy/web.env

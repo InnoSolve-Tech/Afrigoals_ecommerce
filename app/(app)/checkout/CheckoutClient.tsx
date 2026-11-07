@@ -3,7 +3,7 @@
 import { AlertTriangle, ArrowLeft, Loader2, ShoppingBag } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { CheckoutButton } from "@/components/app/CheckoutButton";
 import { DeliveryMapPicker } from "@/components/checkout/DeliveryMapPicker";
@@ -11,6 +11,7 @@ import { GoogleMapsScript } from "@/components/checkout/google-maps-script";
 import { Button } from "@/components/ui/button";
 import { getDeliveryQuote } from "@/lib/actions/delivery";
 import { CHECKOUT_DRAFT_KEY, type CheckoutDraft } from "@/lib/checkout/draft";
+import { StockVerificationNotice } from "@/components/app/StockVerificationNotice";
 import { useCartStock } from "@/lib/hooks/useCartStock";
 import {
   type CartItem as CartItemType,
@@ -28,6 +29,11 @@ type PaymentMethod = "cod" | "mobile_money";
 // Public, non-secret switch. The server enforces IOTEC_MOBILE_MONEY_ENABLED too.
 const MOBILE_MONEY_ENABLED =
   process.env.NEXT_PUBLIC_MOBILE_MONEY_ENABLED !== "false";
+
+function isValidUgandanPhone(value: string) {
+  const phone = value.trim().replace(/[\s().-]/g, "");
+  return /^(?:\+?2567\d{8}|07\d{8}|7\d{8})$/.test(phone);
+}
 
 type CartAccessoryLike = {
   accessoryId: string;
@@ -169,8 +175,15 @@ export function CheckoutClient() {
   const accessoriesTotal = getCartAccessoriesTotal(items);
   const subtotal = productSubtotal + accessoriesTotal;
 
-  const { stockMap, isLoading, hasStockIssues } = useCartStock(rawItems);
+  const {
+    stockMap,
+    isLoading,
+    hasStockIssues,
+    error: stockError,
+    refetch: retryStock,
+  } = useCartStock(rawItems);
 
+  const quoteVersion = useRef(0);
   const [isCalculating, startTransition] = useTransition();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
     MOBILE_MONEY_ENABLED ? "mobile_money" : "cod",
@@ -187,6 +200,7 @@ export function CheckoutClient() {
 
   const [deliveryContactName, setDeliveryContactName] = useState("");
   const [deliveryContactPhone, setDeliveryContactPhone] = useState("");
+  const [mobileMoneyPhone, setMobileMoneyPhone] = useState("");
   const [deliveryAltPhone, setDeliveryAltPhone] = useState("");
   const [deliveryNote, setDeliveryNote] = useState("");
 
@@ -234,8 +248,10 @@ export function CheckoutClient() {
 
           // Re-quote instead of restoring a stored fee: traffic pricing depends
           // on the time of day, so the saved fee may be stale.
+          const version = ++quoteVersion.current;
           startTransition(async () => {
             const result = await getDeliveryQuote({ lat, lng });
+            if (version !== quoteVersion.current) return;
 
             if (result.success && typeof result.fee === "number") {
               setDeliveryFee(result.fee);
@@ -375,8 +391,10 @@ export function CheckoutClient() {
     setDeliveryError(null);
     resetDeliveryQuoteAndContact();
 
+    const version = ++quoteVersion.current;
     startTransition(async () => {
       const result = await getDeliveryQuote({ lat, lng });
+      if (version !== quoteVersion.current) return;
 
       if (!result.success) {
         setDeliveryFee(null);
@@ -410,6 +428,7 @@ export function CheckoutClient() {
   };
 
   const isCheckoutDisabled =
+    Boolean(stockError) ||
     hasStockIssues ||
     isLoading ||
     isLoadingAccessories ||
@@ -541,10 +560,14 @@ export function CheckoutClient() {
 
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label
+                      htmlFor="receiver-name"
+                      className="text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                    >
                       Receiver name
                     </label>
                     <input
+                      id="receiver-name"
                       value={deliveryContactName}
                       onChange={(e) => setDeliveryContactName(e.target.value)}
                       placeholder="Example: Trevor Simon"
@@ -554,10 +577,14 @@ export function CheckoutClient() {
                   </div>
 
                   <div>
-                    <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label
+                      htmlFor="receiver-phone"
+                      className="text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                    >
                       Receiver phone
                     </label>
                     <input
+                      id="receiver-phone"
                       value={deliveryContactPhone}
                       onChange={(e) => setDeliveryContactPhone(e.target.value)}
                       placeholder="Example: 0700000000"
@@ -568,10 +595,14 @@ export function CheckoutClient() {
                   </div>
 
                   <div>
-                    <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label
+                      htmlFor="alternative-phone"
+                      className="text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                    >
                       Alternative phone
                     </label>
                     <input
+                      id="alternative-phone"
                       value={deliveryAltPhone}
                       onChange={(e) => setDeliveryAltPhone(e.target.value)}
                       placeholder="Optional"
@@ -582,10 +613,14 @@ export function CheckoutClient() {
                   </div>
 
                   <div>
-                    <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label
+                      htmlFor="delivery-note"
+                      className="text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                    >
                       Delivery note
                     </label>
                     <input
+                      id="delivery-note"
                       value={deliveryNote}
                       onChange={(e) => setDeliveryNote(e.target.value)}
                       placeholder="Example: Call before arrival"
@@ -643,6 +678,42 @@ export function CheckoutClient() {
                   </div>
                 </button>
 
+                {paymentMethod === "mobile_money" ? (
+                  <div className="space-y-2 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+                    <label
+                      htmlFor="iotec-payer-phone"
+                      className="text-sm font-medium text-zinc-900 dark:text-zinc-100"
+                    >
+                      IOTEC payer phone number
+                    </label>
+                    <input
+                      id="iotec-payer-phone"
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      placeholder="0771234567"
+                      value={mobileMoneyPhone || deliveryContactPhone}
+                      onChange={(event) =>
+                        setMobileMoneyPhone(event.target.value)
+                      }
+                      className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
+                    />
+                    {!isValidUgandanPhone(
+                      mobileMoneyPhone || deliveryContactPhone,
+                    ) ? (
+                      <p className="text-xs text-amber-700 dark:text-amber-300">
+                        Enter a valid Ugandan mobile money number, for example
+                        0771234567.
+                      </p>
+                    ) : null}
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      Enter the MTN or Airtel number that will receive the
+                      payment prompt. It can be different from the receiver's
+                      delivery phone.
+                    </p>
+                  </div>
+                ) : null}
+
                 <button
                   type="button"
                   onClick={() => setPaymentMethod("cod")}
@@ -681,6 +752,7 @@ export function CheckoutClient() {
                 </h2>
               </div>
 
+              <StockVerificationNotice error={stockError} retry={retryStock} />
               {hasStockIssues && !isLoading ? (
                 <div className="mx-6 mt-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
                   <AlertTriangle className="h-5 w-5 shrink-0" />
@@ -942,6 +1014,7 @@ export function CheckoutClient() {
 
               <div className="mt-6">
                 <CheckoutButton
+                  expectedTotal={total}
                   disabled={isCheckoutDisabled}
                   paymentMethod={paymentMethod}
                   deliveryAddress={deliveryAddress}
@@ -951,6 +1024,7 @@ export function CheckoutClient() {
                   deliveryDistanceKm={deliveryDistanceKm}
                   deliveryContactName={deliveryContactName}
                   deliveryContactPhone={deliveryContactPhone}
+                  mobileMoneyPhone={mobileMoneyPhone || deliveryContactPhone}
                   deliveryAltPhone={deliveryAltPhone}
                   deliveryNote={deliveryNote}
                 />
@@ -958,7 +1032,7 @@ export function CheckoutClient() {
 
               <p className="mt-4 text-center text-xs text-zinc-500 dark:text-zinc-400">
                 {paymentMethod === "mobile_money"
-                  ? "Continue to enter your MTN or Airtel number and approve the IOTEC payment prompt."
+                  ? "We'll send an IOTEC payment prompt to the payer phone number above."
                   : "You will pay in cash when your order is delivered."}
               </p>
             </div>

@@ -7,7 +7,13 @@ import { Input } from "@/components/ui/input";
 import { useAuthState } from "@/lib/auth/client";
 import type { ApiOrder } from "@/lib/api/types";
 import { formatPrice, formatDate } from "@/lib/utils";
-import { ORDER_STATUSES, formatOrderStatus } from "@/lib/orders/status";
+import {
+  ORDER_STATUSES,
+  formatOrderStatus,
+  effectiveOrderStage,
+  orderIsPaid,
+  formatOrderPayment,
+} from "@/lib/orders/status";
 
 export default function AdminOrdersPage() {
   const { status, user } = useAuthState();
@@ -52,44 +58,47 @@ export default function AdminOrdersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, isAdmin, statusFilter]);
 
- async function updateStatus(orderId: string, newStatus: string) {
-  setError(null);
+  async function updateStatus(orderId: string, newStatus: string) {
+    setError(null);
 
-  if (!orderId || orderId === "undefined" || orderId === "null") {
-    setError("Invalid order id.");
-    console.error("Status update blocked: invalid order id", {
+    if (!orderId || orderId === "undefined" || orderId === "null") {
+      setError("Invalid order id.");
+      console.error("Status update blocked: invalid order id", {
+        orderId,
+        newStatus,
+      });
+      return;
+    }
+
+    console.log("Calling status update API", {
+      url: `/api/admin/orders/${orderId}/status`,
       orderId,
       newStatus,
     });
-    return;
+
+    const res = await fetch(
+      `/api/admin/orders/${encodeURIComponent(orderId)}/status`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      },
+    );
+
+    const data = await res.json().catch(() => ({}));
+
+    console.log("Status update API response", {
+      status: res.status,
+      data,
+    });
+
+    if (!res.ok) {
+      setError((data as any)?.error || "Failed to update status");
+      return;
+    }
+
+    await loadOrders();
   }
-
-  console.log("Calling status update API", {
-    url: `/api/admin/orders/${orderId}/status`,
-    orderId,
-    newStatus,
-  });
-
-  const res = await fetch(`/api/admin/orders/${encodeURIComponent(orderId)}/status`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status: newStatus }),
-  });
-
-  const data = await res.json().catch(() => ({}));
-
-  console.log("Status update API response", {
-    status: res.status,
-    data,
-  });
-
-  if (!res.ok) {
-    setError((data as any)?.error || "Failed to update status");
-    return;
-  }
-
-  await loadOrders();
-}
 
   if (status === "loading")
     return <p className="text-sm text-muted-foreground">Loading…</p>;
@@ -110,10 +119,17 @@ export default function AdminOrdersPage() {
             Orders
           </h1>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Track purchases and update logistics stages.
+            Track purchases and update logistics stages. Refund paid
+            cancellations or returns from the refunds register.
           </p>
         </div>
         <div className="flex gap-2">
+          <Link
+            href="/admin/refunds"
+            className="rounded-md border px-3 py-2 text-sm"
+          >
+            Refunds and returns
+          </Link>
           <Input
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -138,6 +154,7 @@ export default function AdminOrdersPage() {
               <th className="px-4 py-3">Customer</th>
               <th className="px-4 py-3">Total</th>
               <th className="px-4 py-3">Placed</th>
+              <th className="px-4 py-3">Payment</th>
               <th className="px-4 py-3">Stage</th>
             </tr>
           </thead>
@@ -146,7 +163,7 @@ export default function AdminOrdersPage() {
               <tr>
                 <td
                   className="px-4 py-4 text-zinc-500 dark:text-zinc-400"
-                  colSpan={5}
+                  colSpan={6}
                 >
                   Loading…
                 </td>
@@ -155,7 +172,7 @@ export default function AdminOrdersPage() {
               <tr>
                 <td
                   className="px-4 py-4 text-zinc-500 dark:text-zinc-400"
-                  colSpan={5}
+                  colSpan={6}
                 >
                   No orders.
                 </td>
@@ -192,11 +209,31 @@ export default function AdminOrdersPage() {
                     {formatDate(o.createdAt, "datetime")}
                   </td>
                   <td className="px-4 py-3">
+                    <span
+                      className={
+                        orderIsPaid(o)
+                          ? "font-medium text-green-700 dark:text-green-400"
+                          : "text-zinc-500"
+                      }
+                    >
+                      {formatOrderPayment(o)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
                     <select
                       className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                      value={o.status}
+                      value={effectiveOrderStage(o)}
                       onChange={(e) => updateStatus(o.id, e.target.value)}
                     >
+                      {!ORDER_STATUSES.includes(
+                        effectiveOrderStage(
+                          o,
+                        ) as (typeof ORDER_STATUSES)[number],
+                      ) && (
+                        <option value={effectiveOrderStage(o)}>
+                          {formatOrderStatus(o.status)}
+                        </option>
+                      )}
                       {ORDER_STATUSES.map((s) => (
                         <option key={s} value={s}>
                           {formatOrderStatus(s)}

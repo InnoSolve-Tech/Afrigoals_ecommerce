@@ -1,93 +1,97 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { apiGet } from "@/lib/api/client";
+import type { ApiProduct } from "@/lib/api/types";
 import { formatPrice } from "@/lib/utils";
 import { getStockStatus, getStockMessage } from "@/lib/constants/stock";
-import type { SearchProduct } from "@/lib/ai/types";
-import type { ApiProduct } from "@/lib/api/types";
-
-const productSearchSchema = z.object({
-  query: z
-    .string()
-    .optional()
-    .default("")
-    .describe(
-      "Search term to find products by name, description, or category (e.g., 'oak table', 'leather sofa', 'dining')",
-    ),
+const schema = z.object({
+  query: z.string().optional().default(""),
+  category: z.string().optional().default(""),
+  team: z.string().optional().default(""),
+  kitType: z.string().optional().default(""),
+  size: z.string().optional().default(""),
+  minPrice: z.number().nonnegative().optional().default(0),
+  maxPrice: z.number().nonnegative().optional().default(0),
 });
-
-export const searchProductsTool = tool({
-  description:
-    "Search for products in the sports merchandise store by text query. Returns product details including stock availability.",
-  inputSchema: productSearchSchema,
-  execute: async ({ query }) => {
-    console.log("[SearchProducts] Query received:", { query });
-
-    try {
-      const apiBaseUrl = (
-        process.env.AFRIGOALS_API_URL ||
-        process.env.NEXT_PUBLIC_API_URL ||
-        "http://localhost:8080"
-      ).replace(/\/+$/, "");
-
-      const res = await fetch(
-        `${apiBaseUrl}/products${query ? `?q=${encodeURIComponent(query)}` : ""}`,
-        { headers: { Accept: "application/json" }, cache: "no-store" },
-      );
-      if (!res.ok) {
-        throw new Error(`products query failed: ${res.status}`);
-      }
-      const products = (await res.json()) as ApiProduct[];
-
-      console.log("[SearchProducts] Products found:", products.length);
-
-      if (products.length === 0) {
-        return {
-          found: false,
-          message:
-            "No products found matching your criteria. Try different search terms or filters.",
-          products: [],
-          filters: { query },
-        };
-      }
-
-      // Format the results with stock status for the AI to communicate
-      const formattedProducts: SearchProduct[] = products.map((product) => ({
-        id: product.id,
-        name: product.name ?? null,
-        slug: product.slug ?? null,
-        description: product.description ?? null,
-        price: product.price ?? null,
-        priceFormatted: product.price ? formatPrice(product.price) : null,
-        category: null,
-        categorySlug: null,
+type Filters = z.infer<typeof schema>;
+type Product = ApiProduct & { variants?: { size?: string; stock?: number }[] };
+export async function searchProducts(filters: Partial<Filters>) {
+  const f = schema.parse(filters);
+  const params = new URLSearchParams();
+  const query = [f.query, f.team, f.kitType].filter(Boolean).join(" ");
+  if (query) params.set("q", query);
+  if (f.category)
+    params.set(
+      "category",
+      f.category === "footwear"
+        ? "shoes"
+        : f.category === "fan-gear"
+          ? "accessories"
+          : f.category,
+    );
+  try {
+    const rows = await apiGet<Product[]>(`/products?${params}`);
+    const selected = rows.filter(
+      (p) =>
+        (!f.minPrice || p.price >= f.minPrice) &&
+        (!f.maxPrice || p.price <= f.maxPrice) &&
+        (!f.size ||
+          (p.variants ?? []).some(
+            (v) => v.size?.trim().toLowerCase() === f.size.trim().toLowerCase(),
+          )),
+    );
+    const products = selected.slice(0, 12).map((p) => {
+      const stock = f.size
+        ? (p.variants ?? [])
+            .filter(
+              (v) =>
+                v.size?.trim().toLowerCase() === f.size.trim().toLowerCase(),
+            )
+            .reduce((sum, v) => sum + (v.stock ?? 0), 0)
+        : p.stock;
+      return {
+        id: p.id,
+        name: p.name,
+        slug: p.slug,
+        description: p.description ?? null,
+        price: p.price,
+        priceFormatted: formatPrice(p.price),
+        category: p.category ?? null,
+        categorySlug: p.category ?? null,
         material: null,
         color: null,
         dimensions: null,
-        stockCount: product.stock ?? 0,
-        stockStatus: getStockStatus(product.stock),
-        stockMessage: getStockMessage(product.stock),
-        featured: false,
+        stockCount: stock,
+        stockStatus: getStockStatus(stock),
+        stockMessage: getStockMessage(stock),
+        featured: p.isFeatured ?? false,
         assemblyRequired: false,
-        imageUrl: product.images?.[0] ?? null,
-        productUrl: product.slug ? `/products/${product.slug}` : null,
-      }));
-
-      return {
-        found: true,
-        message: `Found ${products.length} product${products.length === 1 ? "" : "s"} matching your search.`,
-        totalResults: products.length,
-        products: formattedProducts,
-        filters: { query },
+        imageUrl: p.images?.[0] ?? null,
+        productUrl: `/products/${encodeURIComponent(p.slug)}`,
       };
-    } catch (error) {
-      console.error("[SearchProducts] Error:", error);
-      return {
-        found: false,
-        message: "An error occurred while searching for products.",
-        products: [],
-        error: error instanceof Error ? error.message : "Unknown error",
-        filters: { query },
-      };
-    }
-  },
+    });
+    return {
+      found: products.length > 0,
+      message: products.length
+        ? `Found ${products.length} matching products.`
+        : "No products match these filters.",
+      products,
+      totalResults: selected.length,
+      filters: f,
+    };
+  } catch {
+    return {
+      found: false,
+      message:
+        "The product catalog is temporarily unavailable. Please try again.",
+      products: [],
+      filters: f,
+    };
+  }
+}
+export const searchProductsTool = tool({
+  description:
+    "Search live merchandise prices and variant stock by category, team, kit, size and budget.",
+  inputSchema: schema,
+  execute: searchProducts,
 });

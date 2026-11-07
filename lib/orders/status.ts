@@ -9,6 +9,8 @@ export const ORDER_STATUSES = [
   "cancelled",
   "payment_failed",
   "pending",
+  "pending_payment",
+  "confirmed",
 ] as const;
 
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
@@ -86,4 +88,54 @@ export function isFinalOrderStatus(status: string | undefined | null) {
     "canceled",
     "payment_failed",
   ].includes(normalizedStatus);
+}
+export function orderIsPaid(order: {
+  paymentStatus?: string;
+  status: string;
+  paidAt?: string | null;
+}) {
+  return (
+    normalizeOrderStatus(order.paymentStatus) === "paid" ||
+    (!order.paymentStatus &&
+      (Boolean(order.paidAt) || normalizeOrderStatus(order.status) === "paid"))
+  );
+}
+
+export function effectiveOrderStage(order: {
+  paymentStatus?: string;
+  status: string;
+  paidAt?: string | null;
+}) {
+  const stage = normalizeOrderStatus(order.status);
+  if (
+    orderIsPaid(order) &&
+    [
+      "unpaid",
+      "pending",
+      "pending_payment",
+      "confirmed",
+      "payment_failed",
+      "paid",
+    ].includes(stage)
+  )
+    return "paid";
+  return stage === "canceled" ? "cancelled" : stage;
+}
+
+export function formatOrderPayment(order: {
+  status: string;
+  paymentStatus?: string;
+  paidAt?: string | null;
+  total: number;
+  refundedAmount?: number;
+  refundPendingAmount?: number;
+}) {
+  if ((order.refundedAmount ?? 0) > 0)
+    return (order.refundedAmount ?? 0) >= order.total
+      ? "Refunded"
+      : "Partially refunded";
+  if ((order.refundPendingAmount ?? 0) > 0) return "Paid · refund pending";
+  return orderIsPaid(order)
+    ? "Paid"
+    : formatOrderStatus(order.paymentStatus || "unpaid");
 }

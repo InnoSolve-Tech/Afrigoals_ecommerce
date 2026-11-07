@@ -25,6 +25,8 @@ export function DeliveryMapPicker({
   onSelect,
   initialCenter = DEFAULT_CENTER,
 }: DeliveryMapPickerProps) {
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
   const mapRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -75,7 +77,7 @@ export function DeliveryMapPicker({
     mapInstanceRef.current?.setZoom(17);
     moveMarker(position);
 
-    onSelect(location);
+    onSelectRef.current(location);
   }
 
   async function reverseGeocode(position: LatLngLiteral) {
@@ -166,45 +168,47 @@ export function DeliveryMapPicker({
     }
   }
 
- function handleAutocompleteSelection() {
-  const autocomplete = autocompleteRef.current;
+  function handleAutocompleteSelection() {
+    const autocomplete = autocompleteRef.current;
 
-  if (!autocomplete || typeof autocomplete.getPlace !== "function") {
-    setError("Autocomplete is not ready yet.");
-    return;
+    if (!autocomplete || typeof autocomplete.getPlace !== "function") {
+      setError("Autocomplete is not ready yet.");
+      return;
+    }
+
+    const place = autocomplete.getPlace();
+
+    if (!place) {
+      setError(
+        "No place was selected. Please choose a suggestion from the dropdown.",
+      );
+      return;
+    }
+
+    const location = place.geometry?.location;
+
+    if (!location) {
+      setError("Selected place has no location. Pick another suggestion.");
+      return;
+    }
+
+    const lat = Number(location.lat());
+    const lng = Number(location.lng());
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      setError("Selected place returned invalid coordinates.");
+      return;
+    }
+
+    selectLocation({
+      address:
+        place.formatted_address ||
+        place.name ||
+        `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+      lat,
+      lng,
+    });
   }
-
-  const place = autocomplete.getPlace();
-
-  if (!place) {
-    setError("No place was selected. Please choose a suggestion from the dropdown.");
-    return;
-  }
-
-  const location = place.geometry?.location;
-
-  if (!location) {
-    setError("Selected place has no location. Pick another suggestion.");
-    return;
-  }
-
-  const lat = Number(location.lat());
-  const lng = Number(location.lng());
-
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    setError("Selected place returned invalid coordinates.");
-    return;
-  }
-
-  selectLocation({
-    address:
-      place.formatted_address ||
-      place.name ||
-      `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
-    lat,
-    lng,
-  });
-}
 
   function confirmSelectedLocation() {
     if (!selectedLocation) {
@@ -212,7 +216,7 @@ export function DeliveryMapPicker({
       return;
     }
 
-    onSelect(selectedLocation);
+    onSelectRef.current(selectedLocation);
   }
 
   useEffect(() => {
@@ -257,6 +261,7 @@ export function DeliveryMapPicker({
     }
 
     let cancelled = false;
+    setIsReady(false);
 
     async function initMap() {
       try {
@@ -394,8 +399,19 @@ export function DeliveryMapPicker({
 
     return () => {
       cancelled = true;
+      for (const instance of [
+        autocompleteRef.current,
+        markerRef.current,
+        mapInstanceRef.current,
+      ]) {
+        if (instance) googleMaps.event?.clearInstanceListeners(instance);
+      }
+      if (typeof markerRef.current?.setMap === "function")
+        markerRef.current.setMap(null);
+      else if (markerRef.current) markerRef.current.map = null;
+      autocompleteRef.current = null;
     };
-  }, [isGoogleLoaded, initialCenter]);
+  }, [isGoogleLoaded, initialCenter.lat, initialCenter.lng]);
 
   return (
     <div className="space-y-3">
@@ -406,6 +422,7 @@ export function DeliveryMapPicker({
 
         <input
           ref={inputRef}
+          disabled={!isReady || isResolving}
           type="text"
           value={searchValue}
           onChange={(event) => {

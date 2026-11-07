@@ -12,6 +12,7 @@ type PaymentMethod = "cod" | "mobile_money";
 
 interface CheckoutButtonProps {
   disabled?: boolean;
+  expectedTotal: number;
   paymentMethod: PaymentMethod;
 
   deliveryAddress: string;
@@ -22,6 +23,7 @@ interface CheckoutButtonProps {
 
   deliveryContactName: string;
   deliveryContactPhone: string;
+  mobileMoneyPhone: string;
   deliveryAltPhone?: string;
   deliveryNote?: string;
 }
@@ -46,6 +48,11 @@ function cleanPhone(value: string | undefined): string {
 
 function isValidPhone(value: string): boolean {
   return /^\+?[0-9]{7,15}$/.test(value);
+}
+
+function isValidUgandanMobilePhone(value: string): boolean {
+  const phone = value.replace(/[\s().-]/g, "");
+  return /^(?:\+?2567\d{8}|07\d{8}|7\d{8})$/.test(phone);
 }
 
 function cleanText(value?: string | null) {
@@ -83,6 +90,7 @@ function prepareCheckoutItems(items: CartItem[]): CheckoutPayloadItem[] {
 
 export function CheckoutButton({
   disabled,
+  expectedTotal,
   paymentMethod,
   deliveryAddress,
   deliveryLat,
@@ -91,6 +99,7 @@ export function CheckoutButton({
   deliveryDistanceKm,
   deliveryContactName,
   deliveryContactPhone,
+  mobileMoneyPhone,
   deliveryAltPhone,
   deliveryNote,
 }: CheckoutButtonProps) {
@@ -100,6 +109,7 @@ export function CheckoutButton({
 
   const receiverName = deliveryContactName.trim();
   const receiverPhone = cleanPhone(deliveryContactPhone);
+  const payerPhone = cleanPhone(mobileMoneyPhone);
   const receiverAltPhone = cleanPhone(deliveryAltPhone);
   const receiverNote = deliveryNote?.trim() || "";
 
@@ -115,13 +125,16 @@ export function CheckoutButton({
     !!receiverPhone &&
     isValidPhone(receiverPhone) &&
     (!receiverAltPhone || isValidPhone(receiverAltPhone));
+  const hasValidPayer =
+    paymentMethod !== "mobile_money" || isValidUgandanMobilePhone(payerPhone);
 
   const canCheckout =
     !disabled &&
     !isPending &&
     items.length > 0 &&
     hasValidDelivery &&
-    hasValidReceiver;
+    hasValidReceiver &&
+    hasValidPayer;
 
   function validateBeforeCheckout(): string | null {
     if (!items.length) return "Your cart is empty.";
@@ -146,6 +159,13 @@ export function CheckoutButton({
 
     if (receiverAltPhone && !isValidPhone(receiverAltPhone)) {
       return "Alternative phone is invalid.";
+    }
+
+    if (
+      paymentMethod === "mobile_money" &&
+      !isValidUgandanMobilePhone(payerPhone)
+    ) {
+      return "Enter a valid Ugandan MTN or Airtel payer number.";
     }
 
     return null;
@@ -192,6 +212,8 @@ export function CheckoutButton({
             note: receiverNote,
           },
           paymentMethod,
+          payerPhone,
+          expectedTotal,
         );
 
         if (!result.success) {
@@ -227,6 +249,17 @@ export function CheckoutButton({
           });
 
           return;
+        }
+
+        if (paymentMethod === "mobile_money" && result.orderId) {
+          try {
+            window.sessionStorage.setItem(
+              `afrigoals-iotec-payer-${result.orderId}`,
+              payerPhone,
+            );
+          } catch {
+            // The pay page still has the delivery contact number as a fallback.
+          }
         }
 
         window.location.href = result.url;

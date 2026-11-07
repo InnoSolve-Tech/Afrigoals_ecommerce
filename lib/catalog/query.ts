@@ -180,13 +180,8 @@ export async function getCatalogProductsByIds(
   const qs = new URLSearchParams();
   qs.set("ids", uniqueIds.join(","));
 
-  let products: ApiProduct[] = [];
-
-  try {
-    products = await apiGet<ApiProduct[]>(`/products?${qs}`);
-  } catch {
-    products = [];
-  }
+  // An unavailable inventory service is not an empty catalog.
+  const products = await apiGet<ApiProduct[]>(`/products?${qs}`);
 
   return products.map(apiProductToCatalogProductWithVariants);
 }
