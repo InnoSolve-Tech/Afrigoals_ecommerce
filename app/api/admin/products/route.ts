@@ -18,9 +18,7 @@ export async function GET(req: Request) {
   if (sport) qs.set("sport", sport);
   if (featured) qs.set("featured", featured);
 
-  const res = await authedFetch(
-    `/products${qs.toString() ? `?${qs}` : ""}`,
-  );
+  const res = await authedFetch(`/products${qs.toString() ? `?${qs}` : ""}`);
 
   const body = await res.text();
 

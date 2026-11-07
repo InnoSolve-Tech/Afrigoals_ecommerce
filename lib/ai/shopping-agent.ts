@@ -152,12 +152,14 @@ export function createShoppingAgent({ userId }: ShoppingAgentOptions) {
     searchProducts: searchProductsTool,
   };
 
-  if (getMyOrdersTool) {
+  if (isAuthenticated) {
     tools.getMyOrders = getMyOrdersTool;
   }
 
   return new ToolLoopAgent({
-    model: gateway("anthropic/claude-sonnet-4.5"),
+    model: gateway(
+      process.env.SHOPPING_AI_MODEL || "anthropic/claude-sonnet-4.5",
+    ),
     instructions,
     tools,
   });

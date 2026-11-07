@@ -18,7 +18,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid json" }, { status: 400 });
   }
 
-  const email = String(body.email || "").trim().toLowerCase();
+  const email = String(body.email || "")
+    .trim()
+    .toLowerCase();
   const password = String(body.password || "");
 
   if (!email || !password) {
@@ -28,7 +30,9 @@ export async function POST(req: Request) {
     );
   }
 
-  const trustedDevice = (await cookies()).get(TRUSTED_DEVICE_COOKIE_NAME)?.value;
+  const trustedDevice = (await cookies()).get(
+    TRUSTED_DEVICE_COOKIE_NAME,
+  )?.value;
 
   const res = await fetch(`${apiBaseUrl}/auth/login`, {
     method: "POST",
@@ -65,6 +69,20 @@ export async function POST(req: Request) {
     });
 
     return response;
+  }
+
+  if (
+    !(data as any)?.requires2fa ||
+    typeof (data as any)?.challengeId !== "string" ||
+    !(data as any).challengeId.trim()
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "The sign-in service returned an incomplete response. Please try again.",
+      },
+      { status: 502 },
+    );
   }
 
   return NextResponse.json({

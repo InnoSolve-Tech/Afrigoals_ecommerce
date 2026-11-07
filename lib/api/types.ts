@@ -66,6 +66,9 @@ export type ApiOrder = {
   deliveryLng: number;
   deliveryDistanceKm: number;
   paymentMethod: string;
+  paymentStatus?: string;
+  refundedAmount?: number;
+  refundPendingAmount?: number;
   paidAt?: string | null;
   items: ApiOrderItem[];
   statusEvents?: ApiOrderStatusEvent[];
@@ -76,7 +79,6 @@ export type ApiOrder = {
   deliveryAltPhone?: string;
   deliveryNote?: string;
 };
-
 
 export type ApiProductAccessory = {
   id: string;

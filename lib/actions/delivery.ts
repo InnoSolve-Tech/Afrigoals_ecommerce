@@ -1,11 +1,6 @@
 "use server";
 
-import { calculateDeliveryFee } from "@/lib/delivery/calculate-delivery-fee";
-
-interface DeliveryQuoteInput {
-  lat: number;
-  lng: number;
-}
+import { getBackendApiBaseUrl } from "@/lib/api/backend";
 
 export interface DeliveryQuoteResult {
   success: boolean;
@@ -16,38 +11,49 @@ export interface DeliveryQuoteResult {
   error?: string;
 }
 
-export async function getDeliveryQuote(
-  input: DeliveryQuoteInput,
-): Promise<DeliveryQuoteResult> {
+export async function getDeliveryQuote(input: {
+  lat: number;
+  lng: number;
+}): Promise<DeliveryQuoteResult> {
+  if (
+    !Number.isFinite(input.lat) ||
+    !Number.isFinite(input.lng) ||
+    Math.abs(input.lat) > 90 ||
+    Math.abs(input.lng) > 180
+  ) {
+    return { success: false, error: "Invalid delivery coordinates" };
+  }
   try {
-    if (
-      typeof input.lat !== "number" ||
-      Number.isNaN(input.lat) ||
-      typeof input.lng !== "number" ||
-      Number.isNaN(input.lng)
-    ) {
+    const response = await fetch(`${getBackendApiBaseUrl()}/delivery/quote`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+      cache: "no-store",
+    });
+    const data = await response.json();
+    if (!response.ok)
       return {
         success: false,
-        error: "Invalid delivery coordinates",
+        error: data.error || "Could not calculate delivery",
       };
+    if (
+      !Number.isFinite(data.fee) ||
+      data.fee < 0 ||
+      !Number.isFinite(data.distanceKm)
+    ) {
+      return { success: false, error: "Invalid delivery quote" };
     }
-
-    const quote = await calculateDeliveryFee(input.lat, input.lng);
-
     return {
       success: true,
-      fee: quote.fee,
-      distanceKm: quote.distanceKm,
-      distanceMeters: quote.distanceMeters,
-      currency: quote.currency,
+      fee: data.fee,
+      distanceKm: data.distanceKm,
+      distanceMeters: data.distanceMeters,
+      currency: "UGX",
     };
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to calculate delivery";
-
+  } catch {
     return {
       success: false,
-      error: message,
+      error: "Delivery pricing is temporarily unavailable. Please try again.",
     };
   }
 }

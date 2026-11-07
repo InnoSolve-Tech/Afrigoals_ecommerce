@@ -27,7 +27,6 @@ export function SuccessClient({
   }, [clearCart]);
 
   const isCod = paymentMethod === "cod";
-  const isMobileMoney = paymentMethod === "mobile_money";
   const displayOrder = orderNumber ?? sessionId ?? "—";
 
   return (
@@ -79,9 +78,7 @@ export function SuccessClient({
                 <>
                   <Package className="h-4 w-4 text-zinc-400" />
                   <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                    {isMobileMoney
-                      ? "IOTEC Mobile Money (MTN / Airtel)"
-                      : "Pesapal"}
+                    IOTEC Mobile Money (MTN / Airtel)
                   </span>
                 </>
               )}
